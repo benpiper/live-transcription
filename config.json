@@ -70,5 +70,15 @@
         "radio check": "Signal check",
         "ladder one": "Ladder 1",
         "engine one": "Engine 1"
+    },
+    "settings": {
+        "no_speech_threshold": 0.8,
+        "log_prob_threshold": -0.8,
+        "compression_ratio_threshold": 2.4,
+        "beam_size": 5,
+        "min_silence_duration_ms": 500,
+        "avg_logprob_cutoff": -0.8,
+        "no_speech_prob_cutoff": 0.2,
+        "extreme_confidence_cutoff": -0.4
     }
 }

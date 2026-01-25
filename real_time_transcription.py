@@ -47,10 +47,20 @@ import librosa
 import json
 import re
 
-# Application configuration
+# Application configuration with defaults
 TRANSCRIPTION_CONFIG = {
     "vocabulary": [],
-    "corrections": {}
+    "corrections": {},
+    "settings": {
+        "no_speech_threshold": 0.8,
+        "log_prob_threshold": -0.8,
+        "compression_ratio_threshold": 2.4,
+        "beam_size": 5,
+        "min_silence_duration_ms": 500,
+        "avg_logprob_cutoff": -0.8,
+        "no_speech_prob_cutoff": 0.2,
+        "extreme_confidence_cutoff": -0.4
+    }
 }
 
 # Load the Faster-Whisper model
@@ -96,6 +106,7 @@ speaker_manager = SpeakerManager()
 SAMPLE_RATE = 16000
 BUFFER_SIZE = 4096
 audio_queue = queue.Queue()
+stop_event = threading.Event()
 
 
 import sys
@@ -117,7 +128,7 @@ def audio_callback(indata, frames, time, status):
 
 def visualizer():
     """Thread to display a simple volume meter."""
-    while True:
+    while not stop_event.is_set():
         # Create a simple ASCII bar
         bars = int(current_volume * 300) # multiplier for visibility
         bars = min(bars, 50)
@@ -139,9 +150,12 @@ def transcribe_audio():
     active_buffer = []
     prev_context = None # To store a bit of the previous audio for context
     
-    while True:
+    while not stop_event.is_set():
         # Get new data from the queue
-        new_chunk = audio_queue.get()
+        try:
+            new_chunk = audio_queue.get(timeout=0.2)
+        except queue.Empty:
+            continue
         active_buffer.append(new_chunk)
         
         # Calculate recent volume for silence detection
@@ -202,18 +216,20 @@ def transcribe_audio():
                 except Exception as e:
                     print(f"\nSpeaker ID Error: {e}")
 
+            settings = TRANSCRIPTION_CONFIG["settings"]
+
             # Transcribe with improved settings to suppress hallucinations
             segments, info = model.transcribe(
                 audio_flat, 
-                beam_size=5,
+                beam_size=settings.get("beam_size", 5),
                 language="en",
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500),
+                vad_parameters=dict(min_silence_duration_ms=settings.get("min_silence_duration_ms", 500)),
                 initial_prompt=combined_prompt,
                 # Suppress hallucinations
-                no_speech_threshold=0.6,
-                log_prob_threshold=-1.0,
-                compression_ratio_threshold=2.4,
+                no_speech_threshold=settings.get("no_speech_threshold", 0.8),
+                log_prob_threshold=settings.get("log_prob_threshold", -0.8),
+                compression_ratio_threshold=settings.get("compression_ratio_threshold", 2.4),
                 condition_on_previous_text=False # Prevent hallucinations from bleeding into context
             )
 
@@ -226,14 +242,23 @@ def transcribe_audio():
                 # no_speech_prob: higher is worse (closer to 1.0).
                 
                 is_hallucination = False
-                if text_segment.lower() in ["thank you.", "thanks for watching.", "subscribe", "please subscribe"]:
+                hallucination_patterns = [
+                    "thank you.", "thanks for watching.", "subscribe", "please subscribe",
+                    "welcome back", "my channel", "social media", "I'll see you", 
+                    "hey everyone", "thanks for having me", "thanks for having us"
+                ]
+                if any(p in text_segment.lower() for p in hallucination_patterns):
                     is_hallucination = True
                 
                 if not is_hallucination:
-                    # Combined confidence check
-                    if segment.avg_logprob > -1.0 and segment.no_speech_prob < 0.4:
+                    # Stricter combined confidence check
+                    avg_cutoff = settings.get("avg_logprob_cutoff", -0.8)
+                    no_speech_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
+                    extreme_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
+                    
+                    if segment.avg_logprob > avg_cutoff and segment.no_speech_prob < no_speech_cutoff:
                         full_text += segment.text
-                    elif segment.avg_logprob > -0.5: # Extremely confident regardless of no_speech_prob
+                    elif segment.avg_logprob > extreme_cutoff: # extremely confident
                         full_text += segment.text
 
             text = full_text.strip()
@@ -323,7 +348,7 @@ if __name__ == "__main__":
             source="speechbrain/spkrec-ecapa-voxceleb", 
             run_opts={"device":"cpu"}
         )
-        print("Speaker model loaded.")
+        #print("Speaker model loaded.")
 
     if args.output:
         transcribe_audio.output_file = args.output
@@ -333,10 +358,18 @@ if __name__ == "__main__":
         try:
             with open(args.config, 'r') as f:
                 loaded_config = json.load(f)
-                TRANSCRIPTION_CONFIG.update(loaded_config)
+                # Deep merge for settings
+                if "settings" in loaded_config:
+                    TRANSCRIPTION_CONFIG["settings"].update(loaded_config["settings"])
+                
+                # Simple update for others
+                for key in ["vocabulary", "corrections"]:
+                    if key in loaded_config:
+                        TRANSCRIPTION_CONFIG[key] = loaded_config[key]
+                
                 print(f"Loaded config from {args.config}")
-                if TRANSCRIPTION_CONFIG["vocabulary"]:
-                    print(f"Vocabulary: {', '.join(TRANSCRIPTION_CONFIG['vocabulary'])}")
+                #if TRANSCRIPTION_CONFIG["vocabulary"]:
+                    #print(f"Vocabulary: {', '.join(TRANSCRIPTION_CONFIG['vocabulary'])}")
         except Exception as e:
             print(f"Error loading config: {e}")
 
@@ -356,3 +389,5 @@ if __name__ == "__main__":
                     time.sleep(0.1)
             except KeyboardInterrupt:
                 print("\nStopping...")
+                stop_event.set()
+                time.sleep(0.5)

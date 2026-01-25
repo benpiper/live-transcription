@@ -80,6 +80,10 @@ You can provide a JSON file to help the AI with specific terminology:
 
 - **Vocabulary**: Words added to the `initial_prompt` to "bias" the model toward these spellings.
 - **Corrections**: A mapping for automated search-and-replace after transcription (useful for common phonetic errors).
+- **Settings**: Tunable AI parameters including:
+    - `no_speech_threshold`: Sensitivity for silence detection (higher = more skeptical).
+    - `compression_ratio_threshold`: Strictness against repetitive text (higher = more tolerant).
+    - `avg_logprob_cutoff`: Confidence floor for a phrase (closer to 0 is higher confidence).
 
 ## 📜 License
 
