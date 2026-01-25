@@ -158,6 +158,13 @@ def transcribe_audio():
         except queue.Empty:
             continue
         
+        # Sentinel for flushing
+        if timestamp is None:
+            if active_buffer:
+                # Force one last transcription
+                transcribe_chunk(active_buffer, prev_context, start_time)
+            break
+
         if not active_buffer:
             start_time = timestamp
             
@@ -180,132 +187,136 @@ def transcribe_audio():
         if not should_transcribe:
             continue
 
-        # Prepare audio data
-        audio_data = np.concatenate(active_buffer)
-        audio_flat = audio_data.flatten().astype(np.float32)
-
-        # Prepend a bit of previous context (0.5s) to help with word fragments
-        if prev_context is not None:
-            audio_flat = np.concatenate([prev_context, audio_flat])
-
-        # Calculate total volume for the whole chunk
-        volume_norm = np.linalg.norm(audio_flat) / np.sqrt(len(audio_flat))
-        
-        if volume_norm > 0.002:
-            # Better normalization
-            max_val = np.max(np.abs(audio_flat))
-            if max_val > 0.01:
-                audio_flat = audio_flat / max_val
-
-            # Prepare initial prompt
-            prompt_parts = []
-            if TRANSCRIPTION_CONFIG["vocabulary"]:
-                prompt_parts.append(", ".join(TRANSCRIPTION_CONFIG["vocabulary"]))
-            
-            last_text = getattr(transcribe_audio, "last_transcript", None)
-            if last_text:
-                prompt_parts.append(last_text)
-            
-            combined_prompt = ". ".join(prompt_parts) if prompt_parts else None
-
-            # Speaker Identification
-            speaker_label = ""
-            if speaker_model:
-                try:
-                    import torch
-                    signal = torch.from_numpy(audio_flat).unsqueeze(0)
-                    embeddings = speaker_model.encode_batch(signal)
-                    # Squeeze to get [192] from [1, 1, 192]
-                    emb = embeddings.squeeze()
-                    speaker_label = f" [{speaker_manager.identify_speaker(emb)}]"
-                except Exception as e:
-                    print(f"\nSpeaker ID Error: {e}")
-
-            settings = TRANSCRIPTION_CONFIG["settings"]
-
-            # Transcribe with improved settings to suppress hallucinations
-            segments, info = model.transcribe(
-                audio_flat, 
-                beam_size=settings.get("beam_size", 5),
-                language="en",
-                vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=settings.get("min_silence_duration_ms", 500)),
-                initial_prompt=combined_prompt,
-                # Suppress hallucinations
-                no_speech_threshold=settings.get("no_speech_threshold", 0.8),
-                log_prob_threshold=settings.get("log_prob_threshold", -0.8),
-                compression_ratio_threshold=settings.get("compression_ratio_threshold", 2.4),
-                condition_on_previous_text=False # Prevent hallucinations from bleeding into context
-            )
-
-            full_text = ""
-            for segment in segments:
-                text_segment = segment.text.strip()
-                
-                # Filter out obvious hallucinations or very low confidence segments
-                # avg_logprob: lower is worse (closer to -inf). -1.0 is a typical cutoff.
-                # no_speech_prob: higher is worse (closer to 1.0).
-                
-                is_hallucination = False
-                hallucination_patterns = [
-                    "thank you.", "thanks for watching.", "subscribe", "please subscribe",
-                    "welcome back", "my channel", "social media", "I'll see you", 
-                    "hey everyone", "thanks for having me", "thanks for having us"
-                ]
-                if any(p in text_segment.lower() for p in hallucination_patterns):
-                    is_hallucination = True
-                
-                if not is_hallucination:
-                    # Stricter combined confidence check
-                    avg_cutoff = settings.get("avg_logprob_cutoff", -0.8)
-                    no_speech_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
-                    extreme_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
-                    
-                    if segment.avg_logprob > avg_cutoff and segment.no_speech_prob < no_speech_cutoff:
-                        full_text += segment.text
-                    elif segment.avg_logprob > extreme_cutoff: # extremely confident
-                        full_text += segment.text
-
-            text = full_text.strip()
-            
-            # Apply post-processing corrections
-            if text and TRANSCRIPTION_CONFIG["corrections"]:
-                for wrong, right in TRANSCRIPTION_CONFIG["corrections"].items():
-                    # Case-insensitive replacement using regex for whole words
-                    pattern = re.compile(re.escape(wrong), re.IGNORECASE)
-                    text = pattern.sub(right, text)
-
-            if text:
-                # Store text for the next segment's prompt
-                transcribe_audio.last_transcript = text
-                
-                # Use the timestamp from when the audio was first captured
-                display_time = start_time.strftime("%H:%M:%S")
-                output_line = f"[{display_time}]{speaker_label} {text}"
-                # Clear the visualizer line
-                sys.stdout.write("\r" + " " * 80 + "\r")
-                print(output_line)
-                
-                # Write to file if enabled
-                output_file = getattr(transcribe_audio, "output_file", None)
-                if output_file:
-                    try:
-                        with open(output_file, "a", encoding="utf-8") as f:
-                            f.write(output_line + "\n")
-                    except Exception as e:
-                        print(f"\nError writing to output file: {e}")
-
-        # Store the last 0.5s as context for the next chunk
-        context_samples = int(0.5 * SAMPLE_RATE)
-        prev_context = audio_flat[-context_samples:]
-        
-        # Reset the active buffer
+        prev_context = transcribe_chunk(active_buffer, prev_context, start_time)
         active_buffer = []
 
+def transcribe_chunk(active_buffer, prev_context, start_time):
+    """Helper to process a buffer of audio data."""
+    # Prepare audio data
+    audio_data = np.concatenate(active_buffer)
+    audio_flat = audio_data.flatten().astype(np.float32)
 
-# Start threads
-threading.Thread(target=visualizer, daemon=True).start()
-threading.Thread(target=transcribe_audio, daemon=True).start()
+    # Prepend a bit of previous context (0.5s) to help with word fragments
+    if prev_context is not None:
+        audio_flat = np.concatenate([prev_context, audio_flat])
+
+    # Calculate total volume for the whole chunk
+    volume_norm = np.linalg.norm(audio_flat) / np.sqrt(len(audio_flat))
+    
+    if volume_norm > 0.002:
+        # Better normalization
+        max_val = np.max(np.abs(audio_flat))
+        if max_val > 0.01:
+            audio_flat = audio_flat / max_val
+
+        # Prepare initial prompt
+        prompt_parts = []
+        if TRANSCRIPTION_CONFIG["vocabulary"]:
+            prompt_parts.append(", ".join(TRANSCRIPTION_CONFIG["vocabulary"]))
+        
+        last_text = getattr(transcribe_audio, "last_transcript", None)
+        if last_text:
+            prompt_parts.append(last_text)
+        
+        combined_prompt = ". ".join(prompt_parts) if prompt_parts else None
+
+        # Speaker Identification
+        speaker_label = ""
+        if speaker_model:
+            try:
+                import torch
+                signal = torch.from_numpy(audio_flat).unsqueeze(0)
+                embeddings = speaker_model.encode_batch(signal)
+                # Squeeze to get [192] from [1, 1, 192]
+                emb = embeddings.squeeze()
+                speaker_label = f" [{speaker_manager.identify_speaker(emb)}]"
+            except Exception as e:
+                print(f"\nSpeaker ID Error: {e}")
+
+        settings = TRANSCRIPTION_CONFIG["settings"]
+
+        # Transcribe with improved settings to suppress hallucinations
+        segments, info = model.transcribe(
+            audio_flat, 
+            beam_size=settings.get("beam_size", 5),
+            language="en",
+            vad_filter=True,
+            vad_parameters=dict(min_silence_duration_ms=settings.get("min_silence_duration_ms", 500)),
+            initial_prompt=combined_prompt,
+            # Suppress hallucinations
+            no_speech_threshold=settings.get("no_speech_threshold", 0.8),
+            log_prob_threshold=settings.get("log_prob_threshold", -0.8),
+            compression_ratio_threshold=settings.get("compression_ratio_threshold", 2.4),
+            condition_on_previous_text=False # Prevent hallucinations from bleeding into context
+        )
+
+        full_text = ""
+        for segment in segments:
+            text_segment = segment.text.strip()
+            
+            # Filter out obvious hallucinations or very low confidence segments
+            # avg_logprob: lower is worse (closer to -inf). -1.0 is a typical cutoff.
+            # no_speech_prob: higher is worse (closer to 1.0).
+            
+            is_hallucination = False
+            hallucination_patterns = [
+                "thank you.", "thanks for watching.", "subscribe", "please subscribe",
+                "welcome back", "my channel", "social media", "I'll see you", 
+                "hey everyone", "thanks for having me", "thanks for having us"
+            ]
+            if any(p in text_segment.lower() for p in hallucination_patterns):
+                is_hallucination = True
+            
+            if not is_hallucination:
+                # Stricter combined confidence check
+                avg_cutoff = settings.get("avg_logprob_cutoff", -0.8)
+                no_speech_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
+                extreme_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
+                
+                if segment.avg_logprob > avg_cutoff and segment.no_speech_prob < no_speech_cutoff:
+                    full_text += segment.text
+                elif segment.avg_logprob > extreme_cutoff: # extremely confident
+                    full_text += segment.text
+
+        text = full_text.strip()
+        
+        # Apply post-processing corrections
+        if text and TRANSCRIPTION_CONFIG["corrections"]:
+            for wrong, right in TRANSCRIPTION_CONFIG["corrections"].items():
+                # Case-insensitive replacement using regex for whole words
+                pattern = re.compile(re.escape(wrong), re.IGNORECASE)
+                text = pattern.sub(right, text)
+
+        if text:
+            # Store text for the next segment's prompt
+            transcribe_audio.last_transcript = text
+            
+            # Use the timestamp from when the audio was first captured
+            display_time = start_time.strftime("%H:%M:%S")
+            output_line = f"[{display_time}]{speaker_label} {text}"
+            # Clear the visualizer line
+            sys.stdout.write("\r" + " " * 80 + "\r")
+            print(output_line)
+            
+            # Write to file if enabled
+            output_file = getattr(transcribe_audio, "output_file", None)
+            if output_file:
+                try:
+                    with open(output_file, "a", encoding="utf-8") as f:
+                        f.write(output_line + "\n")
+                except Exception as e:
+                    print(f"\nError writing to output file: {e}")
+
+    # Store the last 0.5s as context for the next chunk
+    context_samples = int(0.5 * SAMPLE_RATE)
+    prev_context = audio_flat[-context_samples:]
+    
+    # Reset the active buffer
+    active_buffer = []
+    return prev_context
+
+
+# Thread objects will be created in main
 
 def feed_file_to_queue(file_path):
     """Feeds an audio file into the transcription queue at real-time speed."""
@@ -338,6 +349,7 @@ def feed_file_to_queue(file_path):
         time.sleep(chunk_duration)
     
     print("\nEnd of file reached.")
+    audio_queue.put((None, None))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live Transcription with Faster-Whisper")
@@ -379,9 +391,16 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error loading config: {e}")
 
+    # Start threads
+    threading.Thread(target=visualizer, daemon=True).start()
+    transcription_thread = threading.Thread(target=transcribe_audio, daemon=True)
+    transcription_thread.start()
+
     if args.input:
         try:
             feed_file_to_queue(args.input)
+            # Wait for transcription to finish flushing
+            transcription_thread.join(timeout=30)
         except Exception as e:
             print(f"Error reading file: {e}")
     else:
