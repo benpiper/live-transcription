@@ -196,9 +196,19 @@ def transcribe_audio():
                 transcribe_audio.last_transcript = text
                 
                 timestamp = datetime.now().strftime("%H:%M:%S")
+                output_line = f"[{timestamp}] {text}"
                 # Clear the visualizer line
                 sys.stdout.write("\r" + " " * 80 + "\r")
-                print(f"[{timestamp}] {text}")
+                print(output_line)
+                
+                # Write to file if enabled
+                output_file = getattr(transcribe_audio, "output_file", None)
+                if output_file:
+                    try:
+                        with open(output_file, "a", encoding="utf-8") as f:
+                            f.write(output_line + "\n")
+                    except Exception as e:
+                        print(f"\nError writing to output file: {e}")
 
         # Store the last 0.5s as context for the next chunk
         context_samples = int(0.5 * SAMPLE_RATE)
@@ -248,7 +258,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live Transcription with Faster-Whisper")
     parser.add_argument("--input", type=str, help="Path to an audio file to test instead of microphone")
     parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary and corrections")
+    parser.add_argument("--output", "-o", type=str, help="Path to output text file")
     args = parser.parse_args()
+
+    if args.output:
+        transcribe_audio.output_file = args.output
+        print(f"Transcription will be saved to {args.output}")
 
     if args.config:
         try:

@@ -1,13 +1,14 @@
 {
     "vocabulary": [
-        "trolley",
-        "dorchester",
-        "summerville",
-        "emsops"
+        "Trolley",
+        "Dorchester",
+        "Summerville",
+        "EMSOPS"
     ],
     "corrections": {
-        "old charlie": "old trolley",
-        "somerville": "summerville",
-        "emsox": "emsops"
+        "Old Charlie": "Old Trolley",
+        "Somerville": "Summerville",
+        "EMSOX": "EMSOPS",
+        "dogs challenger": "Dodge Challenger"
     }
 }
