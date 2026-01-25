@@ -78,7 +78,7 @@ class SpeakerManager:
         best_label = None
         
         for spk_emb, label in self.speakers:
-            sim = cosine_similarity(embedding, spk_emb).item()
+            sim = cosine_similarity(embedding.unsqueeze(0), spk_emb.unsqueeze(0)).item()
             if sim > max_sim:
                 max_sim = sim
                 best_label = label
