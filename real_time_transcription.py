@@ -59,7 +59,9 @@ TRANSCRIPTION_CONFIG = {
         "min_silence_duration_ms": 500,
         "avg_logprob_cutoff": -0.8,
         "no_speech_prob_cutoff": 0.2,
-        "extreme_confidence_cutoff": -0.4
+        "extreme_confidence_cutoff": -0.4,
+        "min_window_sec": 1.0,
+        "max_window_sec": 5.0
     }
 }
 
@@ -174,14 +176,15 @@ def transcribe_audio():
         recent_vol = np.linalg.norm(new_chunk) / np.sqrt(len(new_chunk))
         
         # Determine if we should transcribe now
-        # 1. We have at least ~1.0s of audio and it's quiet right now (silence-based cut)
-        # 2. OR we've reached a safety limit of ~5 seconds (force cut)
         buffer_duration = len(active_buffer) * (BUFFER_SIZE / SAMPLE_RATE)
-        
+        settings = TRANSCRIPTION_CONFIG["settings"]
+        min_win = settings.get("min_window_sec", 1.0)
+        max_win = settings.get("max_window_sec", 5.0)
+
         should_transcribe = False
-        if buffer_duration >= 1.0 and recent_vol < 0.002:
+        if buffer_duration >= min_win and recent_vol < 0.002:
             should_transcribe = True
-        elif buffer_duration >= 5.0:
+        elif buffer_duration >= max_win:
             should_transcribe = True
             
         if not should_transcribe:

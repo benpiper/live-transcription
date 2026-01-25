@@ -73,13 +73,15 @@
         "in around": "en route"
     },
     "settings": {
-        "no_speech_threshold": 0.8,
+        "no_speech_threshold": 0.7,
         "log_prob_threshold": -0.8,
         "compression_ratio_threshold": 2.4,
         "beam_size": 5,
         "min_silence_duration_ms": 500,
         "avg_logprob_cutoff": -0.8,
         "no_speech_prob_cutoff": 0.2,
-        "extreme_confidence_cutoff": -0.4
+        "extreme_confidence_cutoff": -0.4,
+        "min_window_sec": 1.0,
+        "max_window_sec": 8.0
     }
 }

@@ -84,6 +84,8 @@ You can provide a JSON file to help the AI with specific terminology:
     - `no_speech_threshold`: Sensitivity for silence detection (higher = more skeptical).
     - `compression_ratio_threshold`: Strictness against repetitive text (higher = more tolerant).
     - `avg_logprob_cutoff`: Confidence floor for a phrase (closer to 0 is higher confidence).
+    - `min_window_sec`: Minimum audio accumulated before a silence-based cut is allowed.
+    - `max_window_sec`: Maximum audio allowed before forcing a transcription cut.
 
 ## 📜 License
 
