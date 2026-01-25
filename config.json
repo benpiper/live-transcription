@@ -51,8 +51,10 @@
         "Ambulance",
         "Saline",
         "Oxygen",
+        "liters",
         "Pulse",
         "Blood pressure",
+        "Respiratory",
         "Cardiac",
         "Protocol",
         "Triage"
