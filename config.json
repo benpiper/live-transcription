@@ -69,7 +69,8 @@
         "code two": "Code 2",
         "radio check": "Signal check",
         "ladder one": "Ladder 1",
-        "engine one": "Engine 1"
+        "engine one": "Engine 1",
+        "in around": "en route"
     },
     "settings": {
         "no_speech_threshold": 0.8,

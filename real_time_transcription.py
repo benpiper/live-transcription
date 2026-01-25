@@ -123,7 +123,7 @@ def audio_callback(indata, frames, time, status):
     
     # Calculate current peak volume for the visualizer
     current_volume = np.linalg.norm(indata) / np.sqrt(len(indata))
-    audio_queue.put(indata.copy())
+    audio_queue.put((datetime.now(), indata.copy()))
 
 
 def visualizer():
@@ -149,13 +149,18 @@ def transcribe_audio():
     
     active_buffer = []
     prev_context = None # To store a bit of the previous audio for context
+    start_time = None
     
     while not stop_event.is_set():
         # Get new data from the queue
         try:
-            new_chunk = audio_queue.get(timeout=0.2)
+            timestamp, new_chunk = audio_queue.get(timeout=0.2)
         except queue.Empty:
             continue
+        
+        if not active_buffer:
+            start_time = timestamp
+            
         active_buffer.append(new_chunk)
         
         # Calculate recent volume for silence detection
@@ -274,8 +279,9 @@ def transcribe_audio():
                 # Store text for the next segment's prompt
                 transcribe_audio.last_transcript = text
                 
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                output_line = f"[{timestamp}]{speaker_label} {text}"
+                # Use the timestamp from when the audio was first captured
+                display_time = start_time.strftime("%H:%M:%S")
+                output_line = f"[{display_time}]{speaker_label} {text}"
                 # Clear the visualizer line
                 sys.stdout.write("\r" + " " * 80 + "\r")
                 print(output_line)
@@ -319,7 +325,7 @@ def feed_file_to_queue(file_path):
     # Feed in BUFFER_SIZE chunks
     for i in range(0, len(data), BUFFER_SIZE):
         chunk = data[i:i + BUFFER_SIZE].reshape(-1, 1).astype(np.float32)
-        audio_queue.put(chunk)
+        audio_queue.put((datetime.now(), chunk))
         
         # Real-time simulation: wait for the duration of the chunk
         # Calculate how long this chunk would take in seconds
