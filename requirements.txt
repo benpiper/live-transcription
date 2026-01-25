@@ -3,3 +3,5 @@ numpy
 faster-whisper
 soundfile
 librosa
+speechbrain
+torch

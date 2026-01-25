@@ -1,6 +1,14 @@
 import os
 import sys
 import subprocess
+import warnings
+import logging
+
+# Suppress library-level warnings (especially from torch/speechbrain)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message=".*autocast.*")
+logging.getLogger("speechbrain").setLevel(logging.ERROR)
+logging.getLogger("torch").setLevel(logging.ERROR)
 
 # Add CUDA/cuDNN paths for faster-whisper (ctranslate2) if they exist
 def setup_cuda_paths():
@@ -50,6 +58,39 @@ print("Loading faster-whisper model...")
 # Using small.en for a good balance of speed and accuracy
 model = WhisperModel("small.en", device="cpu", compute_type="int8")
 print("Model loaded.")
+
+# Speaker Identification (Optional)
+speaker_model = None
+
+class SpeakerManager:
+    def __init__(self, threshold=0.35):
+        self.threshold = threshold
+        self.speakers = [] # List of (embedding, label)
+    
+    def identify_speaker(self, embedding):
+        if not self.speakers:
+            self.speakers.append((embedding, "Speaker 1"))
+            return "Speaker 1"
+        
+        # Compare with known speakers
+        from torch.nn.functional import cosine_similarity
+        max_sim = -1
+        best_label = None
+        
+        for spk_emb, label in self.speakers:
+            sim = cosine_similarity(embedding, spk_emb).item()
+            if sim > max_sim:
+                max_sim = sim
+                best_label = label
+        
+        if max_sim > self.threshold:
+            return best_label
+        else:
+            new_label = f"Speaker {len(self.speakers) + 1}"
+            self.speakers.append((embedding, new_label))
+            return new_label
+
+speaker_manager = SpeakerManager()
 
 # Audio parameters
 SAMPLE_RATE = 16000
@@ -148,6 +189,19 @@ def transcribe_audio():
             
             combined_prompt = ". ".join(prompt_parts) if prompt_parts else None
 
+            # Speaker Identification
+            speaker_label = ""
+            if speaker_model:
+                try:
+                    import torch
+                    signal = torch.from_numpy(audio_flat).unsqueeze(0)
+                    embeddings = speaker_model.encode_batch(signal)
+                    # Squeeze to get [192] from [1, 1, 192]
+                    emb = embeddings.squeeze()
+                    speaker_label = f" [{speaker_manager.identify_speaker(emb)}]"
+                except Exception as e:
+                    print(f"\nSpeaker ID Error: {e}")
+
             # Transcribe with improved settings to suppress hallucinations
             segments, info = model.transcribe(
                 audio_flat, 
@@ -196,7 +250,7 @@ def transcribe_audio():
                 transcribe_audio.last_transcript = text
                 
                 timestamp = datetime.now().strftime("%H:%M:%S")
-                output_line = f"[{timestamp}] {text}"
+                output_line = f"[{timestamp}]{speaker_label} {text}"
                 # Clear the visualizer line
                 sys.stdout.write("\r" + " " * 80 + "\r")
                 print(output_line)
@@ -259,7 +313,17 @@ if __name__ == "__main__":
     parser.add_argument("--input", type=str, help="Path to an audio file to test instead of microphone")
     parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary and corrections")
     parser.add_argument("--output", "-o", type=str, help="Path to output text file")
+    parser.add_argument("--diarize", "-d", action="store_true", help="Enable speaker identification")
     args = parser.parse_args()
+
+    if args.diarize:
+        print("Loading speaker identification model...")
+        from speechbrain.inference.speaker import EncoderClassifier
+        speaker_model = EncoderClassifier.from_hparams(
+            source="speechbrain/spkrec-ecapa-voxceleb", 
+            run_opts={"device":"cpu"}
+        )
+        print("Speaker model loaded.")
 
     if args.output:
         transcribe_audio.output_file = args.output
