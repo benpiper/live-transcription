@@ -1,0 +1,279 @@
+import os
+import sys
+import subprocess
+
+# Add CUDA/cuDNN paths for faster-whisper (ctranslate2) if they exist
+def setup_cuda_paths():
+    python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    base_paths = [
+        os.path.expanduser(f"~/.local/lib/{python_version}/site-packages/nvidia"),
+        os.path.expanduser(f"/usr/local/lib/{python_version}/dist-packages/nvidia"),
+    ]
+    
+    extra_paths = []
+    for base in base_paths:
+        if os.path.exists(base):
+            for sub in ["cudnn/lib", "cublas/lib"]:
+                full_path = os.path.join(base, sub)
+                if os.path.exists(full_path):
+                    extra_paths.append(full_path)
+    
+    if extra_paths:
+        current_ld = os.environ.get("LD_LIBRARY_PATH", "")
+        new_ld = ":".join(extra_paths + ([current_ld] if current_ld else []))
+        os.environ["LD_LIBRARY_PATH"] = new_ld
+        # Note: on some Linux systems, changing LD_LIBRARY_PATH inside the process 
+        # doesn't affect dlopen() calls that happen later. Users might need to export it first.
+
+setup_cuda_paths()
+
+import sounddevice as sd
+import numpy as np
+from faster_whisper import WhisperModel
+import queue
+import threading
+from datetime import datetime
+import argparse
+import soundfile as sf
+import librosa
+import json
+import re
+
+# Application configuration
+TRANSCRIPTION_CONFIG = {
+    "vocabulary": [],
+    "corrections": {}
+}
+
+# Load the Faster-Whisper model
+print("Loading faster-whisper model...")
+# Using small.en for a good balance of speed and accuracy
+model = WhisperModel("small.en", device="cpu", compute_type="int8")
+print("Model loaded.")
+
+# Audio parameters
+SAMPLE_RATE = 16000
+BUFFER_SIZE = 4096
+audio_queue = queue.Queue()
+
+
+import sys
+import time
+
+# Global for visualization
+current_volume = 0.0
+
+def audio_callback(indata, frames, time, status):
+    """Callback function to capture audio data."""
+    global current_volume
+    if status:
+        print(f"Status: {status}")
+    
+    # Calculate current peak volume for the visualizer
+    current_volume = np.linalg.norm(indata) / np.sqrt(len(indata))
+    audio_queue.put(indata.copy())
+
+
+def visualizer():
+    """Thread to display a simple volume meter."""
+    while True:
+        # Create a simple ASCII bar
+        bars = int(current_volume * 300) # multiplier for visibility
+        bars = min(bars, 50)
+        meter = "[" + "#" * bars + "-" * (50 - bars) + "]"
+        
+        # Determine color/status
+        status = "Active" if current_volume > 0.002 else "Quiet "
+        
+        # Print with carriage return to stay on one line
+        sys.stdout.write(f"\r{meter} {status} (vol: {current_volume:.4f})")
+        sys.stdout.flush()
+        time.sleep(0.05)
+
+
+def transcribe_audio():
+    """Thread to transcribe audio with silence-aware chunking."""
+    print("Transcription thread started.")
+    
+    active_buffer = []
+    prev_context = None # To store a bit of the previous audio for context
+    
+    while True:
+        # Get new data from the queue
+        new_chunk = audio_queue.get()
+        active_buffer.append(new_chunk)
+        
+        # Calculate recent volume for silence detection
+        recent_vol = np.linalg.norm(new_chunk) / np.sqrt(len(new_chunk))
+        
+        # Determine if we should transcribe now
+        # 1. We have at least ~1.0s of audio and it's quiet right now (silence-based cut)
+        # 2. OR we've reached a safety limit of ~5 seconds (force cut)
+        buffer_duration = len(active_buffer) * (BUFFER_SIZE / SAMPLE_RATE)
+        
+        should_transcribe = False
+        if buffer_duration >= 1.0 and recent_vol < 0.002:
+            should_transcribe = True
+        elif buffer_duration >= 5.0:
+            should_transcribe = True
+            
+        if not should_transcribe:
+            continue
+
+        # Prepare audio data
+        audio_data = np.concatenate(active_buffer)
+        audio_flat = audio_data.flatten().astype(np.float32)
+
+        # Prepend a bit of previous context (0.5s) to help with word fragments
+        if prev_context is not None:
+            audio_flat = np.concatenate([prev_context, audio_flat])
+
+        # Calculate total volume for the whole chunk
+        volume_norm = np.linalg.norm(audio_flat) / np.sqrt(len(audio_flat))
+        
+        if volume_norm > 0.002:
+            # Better normalization
+            max_val = np.max(np.abs(audio_flat))
+            if max_val > 0.01:
+                audio_flat = audio_flat / max_val
+
+            # Prepare initial prompt
+            prompt_parts = []
+            if TRANSCRIPTION_CONFIG["vocabulary"]:
+                prompt_parts.append(", ".join(TRANSCRIPTION_CONFIG["vocabulary"]))
+            
+            last_text = getattr(transcribe_audio, "last_transcript", None)
+            if last_text:
+                prompt_parts.append(last_text)
+            
+            combined_prompt = ". ".join(prompt_parts) if prompt_parts else None
+
+            # Transcribe with improved settings to suppress hallucinations
+            segments, info = model.transcribe(
+                audio_flat, 
+                beam_size=5,
+                language="en",
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+                initial_prompt=combined_prompt,
+                # Suppress hallucinations
+                no_speech_threshold=0.6,
+                log_prob_threshold=-1.0,
+                compression_ratio_threshold=2.4,
+                condition_on_previous_text=False # Prevent hallucinations from bleeding into context
+            )
+
+            full_text = ""
+            for segment in segments:
+                text_segment = segment.text.strip()
+                
+                # Filter out obvious hallucinations or very low confidence segments
+                # avg_logprob: lower is worse (closer to -inf). -1.0 is a typical cutoff.
+                # no_speech_prob: higher is worse (closer to 1.0).
+                
+                is_hallucination = False
+                if text_segment.lower() in ["thank you.", "thanks for watching.", "subscribe", "please subscribe"]:
+                    is_hallucination = True
+                
+                if not is_hallucination:
+                    # Combined confidence check
+                    if segment.avg_logprob > -1.0 and segment.no_speech_prob < 0.4:
+                        full_text += segment.text
+                    elif segment.avg_logprob > -0.5: # Extremely confident regardless of no_speech_prob
+                        full_text += segment.text
+
+            text = full_text.strip()
+            
+            # Apply post-processing corrections
+            if text and TRANSCRIPTION_CONFIG["corrections"]:
+                for wrong, right in TRANSCRIPTION_CONFIG["corrections"].items():
+                    # Case-insensitive replacement using regex for whole words
+                    pattern = re.compile(re.escape(wrong), re.IGNORECASE)
+                    text = pattern.sub(right, text)
+
+            if text:
+                # Store text for the next segment's prompt
+                transcribe_audio.last_transcript = text
+                
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                # Clear the visualizer line
+                sys.stdout.write("\r" + " " * 80 + "\r")
+                print(f"[{timestamp}] {text}")
+
+        # Store the last 0.5s as context for the next chunk
+        context_samples = int(0.5 * SAMPLE_RATE)
+        prev_context = audio_flat[-context_samples:]
+        
+        # Reset the active buffer
+        active_buffer = []
+
+
+# Start threads
+threading.Thread(target=visualizer, daemon=True).start()
+threading.Thread(target=transcribe_audio, daemon=True).start()
+
+def feed_file_to_queue(file_path):
+    """Feeds an audio file into the transcription queue at real-time speed."""
+    print(f"Reading from file: {file_path}")
+    data, samplerate = sf.read(file_path)
+    
+    # Proper Resampling
+    if samplerate != SAMPLE_RATE:
+        print(f"Resampling file from {samplerate}Hz to {SAMPLE_RATE}Hz...")
+        data = librosa.resample(data, orig_sr=samplerate, target_sr=SAMPLE_RATE)
+        samplerate = SAMPLE_RATE
+    
+    # Ensure it's mono
+    if len(data.shape) > 1:
+        data = data.mean(axis=1) # Better than just taking first channel
+    
+    # Feed in BUFFER_SIZE chunks
+    for i in range(0, len(data), BUFFER_SIZE):
+        chunk = data[i:i + BUFFER_SIZE].reshape(-1, 1).astype(np.float32)
+        audio_queue.put(chunk)
+        
+        # Real-time simulation: wait for the duration of the chunk
+        # Calculate how long this chunk would take in seconds
+        chunk_duration = len(chunk) / samplerate
+        
+        # We also need to update the visualizer's global volume
+        global current_volume
+        current_volume = np.linalg.norm(chunk) / np.sqrt(len(chunk))
+        
+        time.sleep(chunk_duration)
+    
+    print("\nEnd of file reached.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Live Transcription with Faster-Whisper")
+    parser.add_argument("--input", type=str, help="Path to an audio file to test instead of microphone")
+    parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary and corrections")
+    args = parser.parse_args()
+
+    if args.config:
+        try:
+            with open(args.config, 'r') as f:
+                loaded_config = json.load(f)
+                TRANSCRIPTION_CONFIG.update(loaded_config)
+                print(f"Loaded config from {args.config}")
+                if TRANSCRIPTION_CONFIG["vocabulary"]:
+                    print(f"Vocabulary: {', '.join(TRANSCRIPTION_CONFIG['vocabulary'])}")
+        except Exception as e:
+            print(f"Error loading config: {e}")
+
+    if args.input:
+        try:
+            feed_file_to_queue(args.input)
+        except Exception as e:
+            print(f"Error reading file: {e}")
+    else:
+        # Start capturing audio from the microphone
+        with sd.InputStream(
+            callback=audio_callback, channels=1, samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE
+        ):
+            print("Listening... Press Ctrl+C to stop.")
+            try:
+                while True:
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                print("\nStopping...")

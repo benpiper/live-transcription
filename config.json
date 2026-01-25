@@ -1,0 +1,13 @@
+{
+    "vocabulary": [
+        "trolley",
+        "dorchester",
+        "summerville",
+        "emsops"
+    ],
+    "corrections": {
+        "old charlie": "old trolley",
+        "somerville": "summerville",
+        "emsox": "emsops"
+    }
+}
