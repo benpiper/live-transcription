@@ -42,18 +42,17 @@ sudo apt-get install libportaudio2 libsndfile1
 
 ### Real-time Microphone Transcription
 ```bash
-python3 real_time_transcription.py
+python3 real_time_transcription.py --diarize --config config.json
 ```
 
-### Full Feature Set (Diarization + Config + Output)
+### Full Feature Set (with Output File)
 ```bash
 python3 real_time_transcription.py --diarize --config config.json --output transcript.txt
 ```
 
 ### Testing with an Audio File
-To simulate real-time transcription using a local file:
 ```bash
-python3 real_time_transcription.py --input test.mp3 --diarize
+python3 real_time_transcription.py --input test.mp3 --diarize --config config.json
 ```
 
 ## 🔧 Command Line Arguments
