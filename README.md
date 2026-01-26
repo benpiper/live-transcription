@@ -80,17 +80,27 @@ You can provide a JSON file to help the AI with specific terminology and behavio
         "EMSOX": "EMS ops"
     },
     "settings": {
-        "no_speech_threshold": 0.8,
+        "no_speech_threshold": 0.5,
         "avg_logprob_cutoff": -0.8,
         "min_window_sec": 1.0,
-        "max_window_sec": 10.0
+        "max_window_sec": 10.0,
+        "min_silence_duration_ms": 500
     }
 }
 ```
 
 - **Vocabulary**: Specific terms used to bias the model toward correct spellings.
 - **Corrections**: Automated search-and-replace for common phonetic errors.
-- **Settings**: Tunable AI parameters for silence detection, confidence floors, and windowing.
+- **Settings**: Tunable AI parameters for fine-tuning the transcription engine:
+    - `no_speech_threshold`: (0.0 to 1.0) Sensitivity of the internal VAD. Higher values are more skeptical of quiet sounds, reducing hallucinations but potentially missing soft speech. Default: `0.8`.
+    - `compression_ratio_threshold`: (1.0 to 2.4) Used to detect repetitive text loops. If the text is too repetitive, it's discarded. Default: `2.4`.
+    - `avg_logprob_cutoff`: (-inf to 0) The average log-probability of tokens in a segment. Closer to 0 is more confident. Segments below this are filtered out. Default: `-0.8`.
+    - `no_speech_prob_cutoff`: (0.0 to 1.0) Maximum probability that a segment is actually silence. If higher than this, the segment is rejected. Default: `0.2`.
+    - `extreme_confidence_cutoff`: (-inf to 0) If a segment is extremely confident (e.g., `-0.4`), it will bypass the `no_speech_prob` check entirely.
+    - `min_window_sec`: Minimum duration of audio to accumulate before allowing a silence-based transcription trigger. Prevents many small, broken segments. Default: `1.0`.
+    - `max_window_sec`: Maximum duration audio can accumulate before the system forces a transcription. Effectively the "max sentence length." Default: `10.0`.
+    - `beam_size`: Number of beams to use in the Search. Higher values (e.g., `5`) increase accuracy but increase CPU usage.
+    - `min_silence_duration_ms`: Duration of silence (in ms) required for the VAD filter to consider a segment "finished." Default: `500`.
 
 ## 📜 License
 

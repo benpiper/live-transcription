@@ -15,6 +15,15 @@ let startTime = 0;
 let speakers = new Set();
 let msgCount = 0;
 
+// On-demand playback state
+let rawAudioHistory = []; // {timestamp: float, chunk: Float32Array}
+let transcriptionHistory = []; // {id: string, text: string, speaker: string, audio: Float32Array}
+let historyLimit = 10;
+let isPlaybackMuted = false;
+let liveAudioEnabledBeforePlayback = false;
+let activePlaybackSource = null;
+let activePlaybackId = null;
+
 console.log("App initializing...");
 
 // Initialize Audio Context on user gesture
@@ -97,7 +106,17 @@ function handleAudioData(data) {
     }
     drawVisualizer(peak);
     volLevel.textContent = peak.toFixed(4);
-    volStatus.textContent = peak > 0.002 ? 'Active' : 'Quiet';
+    volStatus.textContent = peak > 0.004 ? 'Active' : 'Quiet';
+
+    // Store in history buffer (keep approx 30 seconds)
+    const now = Date.now() / 1000;
+    rawAudioHistory.push({ timestamp: now, chunk: floatData });
+
+    // Prune raw buffer (30s window)
+    const windowSec = 30;
+    while (rawAudioHistory.length > 0 && rawAudioHistory[0].timestamp < now - windowSec) {
+        rawAudioHistory.shift();
+    }
 
     if (msgCount % 20 === 0) {
         // Latency: Show the last known processing latency
@@ -108,8 +127,8 @@ function handleAudioData(data) {
         }
     }
 
-    // Play if enabled
-    if (isAudioEnabled && audioCtx) {
+    // Play if enabled and not currently playing back history
+    if (isAudioEnabled && audioCtx && !isPlaybackMuted) {
         const buffer = audioCtx.createBuffer(1, floatData.length, 16000);
         buffer.getChannelData(0).set(floatData);
 
@@ -132,10 +151,47 @@ function addTranscriptItem(data) {
     const item = document.createElement('div');
     item.className = 'transcript-item';
 
-    // Calculate true latency
+    // Calculate true latency and extract segment audio
     if (data.origin_time) {
         const latency = (Date.now() / 1000) - data.origin_time;
         latencyStat.textContent = `${(latency * 1000).toFixed(0)}ms`;
+
+        // Extract related audio from history
+        // We look for chunks that happened AFTER origin_time - 1.0s (extra lead-in)
+        const segmentChunks = rawAudioHistory
+            .filter(item => item.timestamp >= data.origin_time - 1.0)
+            .map(item => item.chunk);
+
+        if (segmentChunks.length > 0) {
+            // Concatenate
+            const totalLength = segmentChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+            const combinedAudio = new Float32Array(totalLength);
+            let offset = 0;
+            for (const chunk of segmentChunks) {
+                combinedAudio.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            const itemId = `segment-${Date.now()}`;
+            const historyItem = {
+                id: itemId,
+                speaker: data.speaker,
+                text: data.text,
+                audio: combinedAudio,
+                timestamp: data.timestamp
+            };
+
+            transcriptionHistory.push(historyItem);
+
+            // Limit history
+            const limit = parseInt(document.getElementById('history-limit').value) || 10;
+            while (transcriptionHistory.length > limit) {
+                transcriptionHistory.shift();
+            }
+
+            // Add ID for playback lookup
+            item.dataset.id = itemId;
+        }
     }
 
     speakers.add(data.speaker);
@@ -143,8 +199,11 @@ function addTranscriptItem(data) {
 
     item.innerHTML = `
         <div class="transcript-header">
-            <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
-            <span class="timestamp">${data.timestamp}</span>
+            <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
+            <div class="timestamp-wrapper">
+                <span class="timestamp">${data.timestamp}</span>
+                ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
+            </div>
         </div>
         <div class="transcript-text">${data.text}</div>
     `;
@@ -166,6 +225,64 @@ function drawVisualizer(peak) {
 
     ctx.fillStyle = gradient;
     ctx.fillRect(10, height - barHeight, width - 20, barHeight);
+}
+
+function playSegment(id) {
+    const item = transcriptionHistory.find(h => h.id === id);
+    if (!item || !audioCtx) return;
+
+    // 1. If we are clicking the SAME button that is already playing, STOP it.
+    if (activePlaybackId === id) {
+        if (activePlaybackSource) {
+            activePlaybackSource.stop();
+        }
+        return; // The onended handler below will clean up UI and state
+    }
+
+    // 2. If something else is playing, stop it first
+    if (activePlaybackSource) {
+        try { activePlaybackSource.stop(); } catch (e) { }
+    }
+
+    console.log("Playing back segment:", id);
+
+    // 3. Mute live audio
+    if (!isPlaybackMuted) {
+        liveAudioEnabledBeforePlayback = isAudioEnabled;
+        isPlaybackMuted = true;
+    }
+
+    const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
+    if (btn) {
+        btn.innerHTML = '⏸️';
+        btn.classList.add('playing');
+    }
+
+    const buffer = audioCtx.createBuffer(1, item.audio.length, 16000);
+    buffer.getChannelData(0).set(item.audio);
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+
+    activePlaybackSource = source;
+    activePlaybackId = id;
+
+    source.onended = () => {
+        // Only clear global state if this was the active playback
+        if (activePlaybackId === id) {
+            activePlaybackSource = null;
+            activePlaybackId = null;
+            isPlaybackMuted = false;
+
+            if (btn) {
+                btn.innerHTML = '▶️';
+                btn.classList.remove('playing');
+            }
+        }
+    };
+
+    source.start(0);
 }
 
 connect();

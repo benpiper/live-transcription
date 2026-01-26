@@ -90,8 +90,8 @@ class SpeakerManager:
             # Flatten and ensure float32
             y = audio_chunk.flatten().astype(np.float32)
             
-            # Need a decent amount of audio
-            if len(y) < SAMPLE_RATE * 0.4: return False, 0, 0, 0
+            # Need more audio for a reliable robotic profile
+            if len(y) < SAMPLE_RATE * 0.6: return False, 0, 0, 0
             
             try:
                 # Expanded range for female voices
@@ -100,26 +100,26 @@ class SpeakerManager:
             except:
                 return False, 0, 0, 0
                 
-            if len(f0) < 5: return False, 0, 0, 0
+            if len(f0) < 10: return False, 0, 0, 0
             
             f0_std = np.std(f0)
             f0_mean = np.mean(f0)
             flatness = np.mean(librosa.feature.spectral_flatness(y=y))
             
-            # Robotic voices (especially P25 voice synthesis) are:
-            # 1. Very monotone (f0_std < 8)
-            # 2. Or have specific spectral profiles (flatness > 0.25 - noisy/vocoded)
-            # 3. Or are high-pitched and extremely 'clean' (flatness < 0.03 + mean > 230)
+            # Refined Heuristics (Less Aggressive):
+            # 1. Monotone: std < 8.0 (Human speech is rarely this stable)
+            # 2. Noisy/Vocoded: flatness > 0.28 (Common in older digital dispatcher synths)
+            # 3. 'Clean' High-Pitch AI: flatness < 0.015 and mean > 240 (Speaker 8/5 profile)
             
             is_robotic = False
-            if f0_std < 10.0: # Monotone check
+            if f0_std < 8.0: 
                 is_robotic = True
-            elif flatness > 0.25: # Noisy/Synthetic check (some older P25)
+            elif flatness > 0.28: 
                 is_robotic = True
-            elif f0_mean > 230 and flatness < 0.03: # 'Clean' High-Pitch Female AI (Speaker 8 profile)
+            elif f0_mean > 240 and flatness < 0.015: 
                 is_robotic = True
-            elif f0_std < 15.0 and flatness > 0.15: # Mixed Monotone/Noisy check
-                is_robotic = True
+                
+            return is_robotic, f0_mean, f0_std, flatness
                 
             return is_robotic, f0_mean, f0_std, flatness
         except Exception:
@@ -138,14 +138,24 @@ class SpeakerManager:
         from torch.nn.functional import cosine_similarity
         max_sim = -1
         best_label = None
+        best_idx = -1
         
-        for spk_emb, label in self.speakers:
+        for i, (spk_emb, label) in enumerate(self.speakers):
             sim = cosine_similarity(embedding.unsqueeze(0), spk_emb.unsqueeze(0)).item()
             if sim > max_sim:
                 max_sim = sim
                 best_label = label
+                best_idx = i
         
         if max_sim > self.threshold:
+            # Re-evaluation logic:
+            # If the current label is generic ("Speaker X") AND this chunk looks robotic,
+            # upgrade the label for all future instances of this speaker.
+            if best_label.startswith("Speaker"):
+                is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
+                if is_robo:
+                    self.speakers[best_idx] = (self.speakers[best_idx][0], "Dispatcher (Bot)")
+                    return "Dispatcher (Bot)"
             return best_label
         else:
             new_index = len(self.speakers) + 1

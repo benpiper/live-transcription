@@ -55,6 +55,7 @@
         "Under control",
         "Medical assistance",
         "Patient",
+        "fainting",
         "Trauma",
         "Vitals",
         "EKG",
@@ -83,7 +84,8 @@
         "code two": "Code 2",
         "ladder one": "Ladder 1",
         "engine one": "Engine 1",
-        "in around": "en route"
+        "in around": "en route",
+        "nite": "ninth"
     },
     "settings": {
         "no_speech_threshold": 0.7,
