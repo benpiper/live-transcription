@@ -143,7 +143,7 @@ function addTranscriptItem(data) {
 
     item.innerHTML = `
         <div class="transcript-header">
-            <span class="speaker">${data.speaker || 'Unknown'}</span>
+            <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <span class="timestamp">${data.timestamp}</span>
         </div>
         <div class="transcript-text">${data.text}</div>

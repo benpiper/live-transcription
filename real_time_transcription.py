@@ -84,10 +84,58 @@ class SpeakerManager:
         self.threshold = threshold
         self.speakers = [] # List of (embedding, label)
     
-    def identify_speaker(self, embedding):
+    def is_robotic_voice(self, audio_chunk):
+        """Analyzes an audio chunk to see if it matches a robotic/synthetic profile."""
+        try:
+            # Flatten and ensure float32
+            y = audio_chunk.flatten().astype(np.float32)
+            
+            # Need a decent amount of audio
+            if len(y) < SAMPLE_RATE * 0.5: return False
+            
+            # Use a simpler/safer spectral centroid and zero-crossing rate 
+            # as a proxy for 'robotic' nature if YIN is unstable, 
+            # but let's try a safer YIN first.
+            try:
+                # Use a slightly larger fmin for stability
+                f0 = librosa.yin(y, fmin=80, fmax=400, frame_length=1024)
+                f0 = f0[~np.isnan(f0)]
+            except:
+                return False
+                
+            if len(f0) < 5: return False
+            
+            f0_std = np.std(f0)
+            f0_mean = np.mean(f0)
+            
+            # Spectral flatness
+            flatness = np.mean(librosa.feature.spectral_flatness(y=y))
+            
+            # Diagnostic for the user to help me tune
+            # print(f"\n[RoboDebug] F0 Mean: {f0_mean:.1f}, Std: {f0_std:.2f}, Flat: {flatness:.4f}")
+            
+            # Robotic voices (especially P25 voice synthesis) are:
+            # 1. Very monotone (f0_std < 8)
+            # 2. Or have specific spectral profiles (flatness > 0.2)
+            
+            if f0_std < 8.0:
+                return True
+            if flatness > 0.25:
+                return True
+            if f0_std < 12.0 and flatness > 0.15:
+                return True
+                
+            return False
+        except Exception:
+            return False
+
+    def identify_speaker(self, embedding, audio_chunk=None):
         if not self.speakers:
-            self.speakers.append((embedding, "Speaker 1"))
-            return "Speaker 1"
+            label = "Speaker 1"
+            if audio_chunk is not None and self.is_robotic_voice(audio_chunk):
+                label = "Dispatcher (AI)"
+            self.speakers.append((embedding, label))
+            return label
         
         # Compare with known speakers
         from torch.nn.functional import cosine_similarity
@@ -103,7 +151,13 @@ class SpeakerManager:
         if max_sim > self.threshold:
             return best_label
         else:
-            new_label = f"Speaker {len(self.speakers) + 1}"
+            new_index = len(self.speakers) + 1
+            new_label = f"Speaker {new_index}"
+            
+            # Check if this new unique speaker is robotic
+            if audio_chunk is not None and self.is_robotic_voice(audio_chunk):
+                new_label = f"Dispatcher (AI)"
+                
             self.speakers.append((embedding, new_label))
             return new_label
 
@@ -335,7 +389,7 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
                 embeddings = speaker_model.encode_batch(signal)
                 # Squeeze to get [192] from [1, 1, 192]
                 emb = embeddings.squeeze()
-                speaker_label = f" [{speaker_manager.identify_speaker(emb)}]"
+                speaker_label = f" [{speaker_manager.identify_speaker(emb, audio_flat)}]"
             except Exception as e:
                 print(f"\nSpeaker ID Error: {e}")
 
