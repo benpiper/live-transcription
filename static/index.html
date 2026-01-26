@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Transcription Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <div class="header-left">
+                <h1>Live Stream</h1>
+                <div id="status-badge" class="badge">Disconnected</div>
+            </div>
+            <div class="header-right">
+                <button id="audio-toggle" class="btn-primary">
+                    <span class="icon">🔇</span> Enable Audio
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <section class="feed-section">
+                <div class="section-header">
+                    <h2>Transcription Feed</h2>
+                    <span id="speaker-count" class="text-muted">0 Speakers Detected</span>
+                </div>
+                <div id="transcript-feed" class="transcript-container">
+                    <!-- Transcripts will appear here -->
+                    <div class="placeholder">Waiting for incoming audio...</div>
+                </div>
+            </section>
+
+            <aside class="sidebar">
+                <section class="visualizer-section">
+                    <h3>Audio Signal</h3>
+                    <canvas id="visualizer"></canvas>
+                    <div class="vol-stats">
+                        <span id="vol-level">0.0000</span>
+                        <span id="vol-status">Quiet</span>
+                    </div>
+                </section>
+
+                <section class="info-section">
+                    <h3>Connection Info</h3>
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <label>Latency</label>
+                            <span id="latency-stat">---</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Buffer</label>
+                            <span id="buffer-stat">0ms</span>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

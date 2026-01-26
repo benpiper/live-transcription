@@ -46,6 +46,11 @@ import soundfile as sf
 import librosa
 import json
 import re
+import asyncio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+import uvicorn
+import base64
 
 # Application configuration with defaults
 TRANSCRIPTION_CONFIG = {
@@ -108,24 +113,122 @@ speaker_manager = SpeakerManager()
 SAMPLE_RATE = 16000
 BUFFER_SIZE = 4096
 audio_queue = queue.Queue()
+broadcast_queue = queue.Queue() # For web JSON data
+audio_broadcast_queue = queue.Queue() # For web raw audio
 stop_event = threading.Event()
 
 
 import sys
 import time
 
+# WebSocket Management
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast_json(self, data: dict):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json(data)
+            except:
+                self.disconnect(connection)
+
+    async def broadcast_bytes(self, data: bytes):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_bytes(data)
+            except:
+                self.disconnect(connection)
+
+ws_manager = ConnectionManager()
+app = FastAPI()
+
+# Background worker for WebSockets
+async def websocket_broadcaster():
+    """Worker to broadcast data from queues to all connected WebSocket clients."""
+    print("WebSocket Broadcaster started.")
+    while not stop_event.is_set():
+        try:
+            # Safely poll queues using a thread-safe helper if needed, 
+            # but for now we'll just use non-blocking gets
+            
+            # Broadcast potential JSON data
+            while not broadcast_queue.empty():
+                try:
+                    data = broadcast_queue.get_nowait()
+                    await ws_manager.broadcast_json(data)
+                except queue.Empty:
+                    break
+
+            # Broadcast potential audio data
+            while not audio_broadcast_queue.empty():
+                try:
+                    audio_bytes = audio_broadcast_queue.get_nowait()
+                    await ws_manager.broadcast_bytes(audio_bytes)
+                except queue.Empty:
+                    break
+                    
+            await asyncio.sleep(0.01) # Low latency check
+        except Exception as e:
+            print(f"Broadcaster Error: {e}")
+            await asyncio.sleep(1)
+
+@app.get("/ping")
+async def ping():
+    return {"status": "ok", "connections": len(ws_manager.active_connections)}
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(websocket_broadcaster())
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    print("New WebSocket client connecting...")
+    await ws_manager.connect(websocket)
+    print(f"Client connected. Active: {len(ws_manager.active_connections)}")
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        print("Client disconnected.")
+        ws_manager.disconnect(websocket)
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+        ws_manager.disconnect(websocket)
+
 # Global for visualization
 current_volume = 0.0
 
-def audio_callback(indata, frames, time, status):
+def audio_callback(indata, frames, time_info, status):
     """Callback function to capture audio data."""
     global current_volume
     if status:
-        print(f"Status: {status}")
+        print(f"\nAudio Status Error: {status}")
     
     # Calculate current peak volume for the visualizer
     current_volume = np.linalg.norm(indata) / np.sqrt(len(indata))
     audio_queue.put((datetime.now(), indata.copy()))
+    
+    # Diagnostic print (once per ~1s)
+    if not hasattr(audio_callback, "last_debug"):
+        audio_callback.last_debug = 0
+    if time.time() - audio_callback.last_debug > 2:
+        # print(f"\nDebug: Audio callback firing (vol: {current_volume:.4f})") # Hidden but helpful for local debugging if needed
+        audio_callback.last_debug = time.time()
+
+    # Broadcast to web clients via queue
+    try:
+        audio_broadcast_queue.put(indata.flatten().astype(np.float32).tobytes())
+    except:
+        pass
 
 
 def visualizer():
@@ -295,8 +398,21 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
             transcribe_audio.last_transcript = text
             
             # Use the timestamp from when the audio was first captured
-            display_time = start_time.strftime("%H:%M:%S")
+            display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
             output_line = f"[{display_time}]{speaker_label} {text}"
+            
+            # Broadcast to web clients via queue
+            try:
+                broadcast_queue.put({
+                    "type": "transcript",
+                    "timestamp": display_time,
+                    "origin_time": start_time.timestamp(), # Send raw timestamp for latency calculation
+                    "speaker": speaker_label.strip(" []"),
+                    "text": text
+                })
+            except:
+                pass
+
             # Clear the visualizer line
             sys.stdout.write("\r" + " " * 80 + "\r")
             print(output_line)
@@ -349,6 +465,12 @@ def feed_file_to_queue(file_path):
         global current_volume
         current_volume = np.linalg.norm(chunk) / np.sqrt(len(chunk))
         
+        # Broadcast to web clients via queue
+        try:
+            audio_broadcast_queue.put(chunk.flatten().astype(np.float32).tobytes())
+        except:
+            pass
+        
         time.sleep(chunk_duration)
     
     print("\nEnd of file reached.")
@@ -360,7 +482,16 @@ if __name__ == "__main__":
     parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary and corrections")
     parser.add_argument("--output", "-o", type=str, help="Path to output text file")
     parser.add_argument("--diarize", "-d", action="store_true", help="Enable speaker identification")
+    parser.add_argument("--web", "-w", action="store_true", help="Enable web dashboard")
+    parser.add_argument("--port", type=int, default=8000, help="Web dashboard port")
+    parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit")
+    parser.add_argument("--device", type=int, help="Input device ID (from --list-devices)")
     args = parser.parse_args()
+
+    if args.list_devices:
+        print("\nAvailable Audio Devices:")
+        print(sd.query_devices())
+        sys.exit(0)
 
     if args.diarize:
         print("Loading speaker identification model...")
@@ -399,23 +530,53 @@ if __name__ == "__main__":
     transcription_thread = threading.Thread(target=transcribe_audio, daemon=True)
     transcription_thread.start()
 
-    if args.input:
-        try:
-            feed_file_to_queue(args.input)
-            # Wait for transcription to finish flushing
-            transcription_thread.join(timeout=30)
-        except Exception as e:
-            print(f"Error reading file: {e}")
-    else:
-        # Start capturing audio from the microphone
-        with sd.InputStream(
-            callback=audio_callback, channels=1, samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE
-        ):
-            print("Listening... Press Ctrl+C to stop.")
+    def run_input_source():
+        """Helper to run the selected input source (file or mic)."""
+        if args.input:
             try:
-                while True:
-                    time.sleep(0.1)
+                feed_file_to_queue(args.input)
+                # Wait for transcription to finish flushing
+                transcription_thread.join(timeout=30)
+                stop_event.set()
+            except Exception as e:
+                print(f"Error reading file: {e}")
+        else:
+            # Start capturing audio from the microphone
+            try:
+                device_info = sd.query_devices(args.device, 'input') if args.device is not None else sd.query_devices(kind='input')
+                print(f"Using input device: {device_info['name']}")
+                
+                with sd.InputStream(
+                    callback=audio_callback, 
+                    channels=1, 
+                    samplerate=SAMPLE_RATE, 
+                    blocksize=BUFFER_SIZE,
+                    device=args.device
+                ):
+                    print("Listening... Press Ctrl+C to stop.")
+                    while not stop_event.is_set():
+                        time.sleep(0.1)
             except KeyboardInterrupt:
                 print("\nStopping...")
                 stop_event.set()
-                time.sleep(0.5)
+            except Exception as e:
+                print(f"Microphone Error: {e}")
+                stop_event.set()
+
+    if args.web:
+        # Create static directory if it doesn't exist
+        os.makedirs("static", exist_ok=True)
+        app.mount("/", StaticFiles(directory="static", html=True), name="static")
+        
+        # Start audio input in a background thread
+        threading.Thread(target=run_input_source, daemon=True).start()
+        
+        print(f"\nWeb Dashboard available at http://localhost:{args.port}")
+        try:
+            uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")
+        except KeyboardInterrupt:
+            print("\nStopping Web Server...")
+            stop_event.set()
+    else:
+        # Run input source in main thread
+        run_input_source()
