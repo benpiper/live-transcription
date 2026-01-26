@@ -91,48 +91,42 @@ class SpeakerManager:
             y = audio_chunk.flatten().astype(np.float32)
             
             # Need a decent amount of audio
-            if len(y) < SAMPLE_RATE * 0.5: return False
+            if len(y) < SAMPLE_RATE * 0.4: return False, 0, 0, 0
             
-            # Use a simpler/safer spectral centroid and zero-crossing rate 
-            # as a proxy for 'robotic' nature if YIN is unstable, 
-            # but let's try a safer YIN first.
             try:
-                # Use a slightly larger fmin for stability
-                f0 = librosa.yin(y, fmin=80, fmax=400, frame_length=1024)
+                # Expanded range for female voices
+                f0 = librosa.yin(y, fmin=60, fmax=600, frame_length=1024)
                 f0 = f0[~np.isnan(f0)]
             except:
-                return False
+                return False, 0, 0, 0
                 
-            if len(f0) < 5: return False
+            if len(f0) < 5: return False, 0, 0, 0
             
             f0_std = np.std(f0)
             f0_mean = np.mean(f0)
-            
-            # Spectral flatness
             flatness = np.mean(librosa.feature.spectral_flatness(y=y))
-            
-            # Diagnostic for the user to help me tune
-            # print(f"\n[RoboDebug] F0 Mean: {f0_mean:.1f}, Std: {f0_std:.2f}, Flat: {flatness:.4f}")
             
             # Robotic voices (especially P25 voice synthesis) are:
             # 1. Very monotone (f0_std < 8)
             # 2. Or have specific spectral profiles (flatness > 0.2)
             
+            is_robotic = False
             if f0_std < 8.0:
-                return True
-            if flatness > 0.25:
-                return True
-            if f0_std < 12.0 and flatness > 0.15:
-                return True
+                is_robotic = True
+            elif flatness > 0.25:
+                is_robotic = True
+            elif f0_std < 12.0 and flatness > 0.15:
+                is_robotic = True
                 
-            return False
+            return is_robotic, f0_mean, f0_std, flatness
         except Exception:
-            return False
+            return False, 0, 0, 0
 
     def identify_speaker(self, embedding, audio_chunk=None):
         if not self.speakers:
             label = "Speaker 1"
-            if audio_chunk is not None and self.is_robotic_voice(audio_chunk):
+            is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
+            if is_robo:
                 label = "Dispatcher (AI)"
             self.speakers.append((embedding, label))
             return label
@@ -155,7 +149,8 @@ class SpeakerManager:
             new_label = f"Speaker {new_index}"
             
             # Check if this new unique speaker is robotic
-            if audio_chunk is not None and self.is_robotic_voice(audio_chunk):
+            is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
+            if is_robo:
                 new_label = f"Dispatcher (AI)"
                 
             self.speakers.append((embedding, new_label))
@@ -455,6 +450,13 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
             display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
             output_line = f"[{display_time}]{speaker_label} {text}"
             
+            # Diagnostic robotic print if enabled
+            if getattr(args, "debug_robo", False):
+                is_robo, f0_m, f0_s, flat = speaker_manager.is_robotic_voice(audio_flat)
+                debug_info = f"\n[RoboDebug] Mean: {f0_m:.1f}, Std: {f0_s:.2f}, Flat: {flat:.4f} | Label: {speaker_label.strip()}"
+                sys.stdout.write("\r" + " " * 80 + "\r")
+                print(debug_info)
+
             # Broadcast to web clients via queue
             try:
                 broadcast_queue.put({
@@ -477,6 +479,7 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
                 try:
                     with open(output_file, "a", encoding="utf-8") as f:
                         f.write(output_line + "\n")
+                        f.flush()
                 except Exception as e:
                     print(f"\nError writing to output file: {e}")
 
@@ -540,6 +543,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8000, help="Web dashboard port")
     parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit")
     parser.add_argument("--device", type=int, help="Input device ID (from --list-devices)")
+    parser.add_argument("--debug-robo", action="store_true", help="Print robotic voice detection stats for debugging")
     args = parser.parse_args()
 
     if args.list_devices:
