@@ -108,14 +108,17 @@ class SpeakerManager:
             
             # Robotic voices (especially P25 voice synthesis) are:
             # 1. Very monotone (f0_std < 8)
-            # 2. Or have specific spectral profiles (flatness > 0.2)
+            # 2. Or have specific spectral profiles (flatness > 0.25 - noisy/vocoded)
+            # 3. Or are high-pitched and extremely 'clean' (flatness < 0.03 + mean > 230)
             
             is_robotic = False
-            if f0_std < 8.0:
+            if f0_std < 10.0: # Monotone check
                 is_robotic = True
-            elif flatness > 0.25:
+            elif flatness > 0.25: # Noisy/Synthetic check (some older P25)
                 is_robotic = True
-            elif f0_std < 12.0 and flatness > 0.15:
+            elif f0_mean > 230 and flatness < 0.03: # 'Clean' High-Pitch Female AI (Speaker 8 profile)
+                is_robotic = True
+            elif f0_std < 15.0 and flatness > 0.15: # Mixed Monotone/Noisy check
                 is_robotic = True
                 
             return is_robotic, f0_mean, f0_std, flatness
@@ -127,7 +130,7 @@ class SpeakerManager:
             label = "Speaker 1"
             is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
             if is_robo:
-                label = "Dispatcher (AI)"
+                label = "Dispatcher (Bot)"
             self.speakers.append((embedding, label))
             return label
         
@@ -151,7 +154,7 @@ class SpeakerManager:
             # Check if this new unique speaker is robotic
             is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
             if is_robo:
-                new_label = f"Dispatcher (AI)"
+                new_label = f"Dispatcher (Bot)"
                 
             self.speakers.append((embedding, new_label))
             return new_label

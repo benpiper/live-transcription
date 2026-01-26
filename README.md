@@ -5,15 +5,14 @@ A high-performance, real-time audio transcription tool using the `faster-whisper
 ## ✨ Features
 
 - **Real-time Transcription**: Transcribes audio as you speak with minimal latency.
-- **Visual Volume Meter**: Real-time ASCII volume bar in the console to monitor mic input.
+- **Web Dashboard**: A modern, glassmorphic web interface to monitor transcription feeds, audio volume, and performance telemetry (Latency, Buffer).
+- **Speaker Identification (Diarization)**: Automatically identifies and labels different speakers (e.g., `[Speaker 1]`) using ECAPA-TDNN voice embeddings.
+- **Robotic Voice Detection**: Automatically identifies synthetic/computer-generated voices (e.g., dispatchers) and labels them as `[Dispatcher (Bot)]`.
+- **Advanced Timestamps**: All outputs include full date/time stamps (e.g., `[2026-01-25 23:46:16]`) for accurate logging.
 - **Silence-Aware Chunking**: Intelligently waits for natural pauses in speech to transcribe, preventing mid-word cut-offs.
-- **Context Overlap**: Prepends a small "tail" of previous audio to current chunks to improve recognition of word fragments.
-- **Hallucination Suppression**: Advanced filtering using `no_speech_prob`, `avg_logprob`, and `compression_ratio` to eliminate "YouTube-style" ghosts (e.g., "Thanks for watching") during silence.
-- **Speaker Identification (Diarization)**: Automatically identifies and labels different speakers (e.g., `[Speaker 1]`, `[Speaker 2]`) using ECAPA-TDNN voice embeddings.
-- **Custom Vocabulary & Corrections**: Bias the AI towards specific terms and apply automated phonetic corrections via a JSON config file.
-- **File Output**: Automatically save all transcriptions to a timestamped text file.
-- **File Testing Mode**: Stream and transcribe local audio files (`.mp3`, `.wav`, etc.) at real-time speed to test settings.
-- **High-Quality Resampling**: Built-in resampling using `librosa` to ensure all audio sources match the 16kHz requirement.
+- **Hallucination Suppression**: Advanced filtering using `no_speech_prob`, `avg_logprob`, and `compression_ratio` to eliminate "YouTube-style" ghosts.
+- **Custom Vocabulary & Corrections**: Bias the AI toward specific terms and apply automated phonetic corrections via a JSON config file.
+- **File Output**: Automatically save all transcriptions to a text file with real-time flushing.
 
 ## 🛠 Prerequisites
 
@@ -40,19 +39,19 @@ sudo apt-get install libportaudio2 libsndfile1
 
 ## 🚀 Usage
 
-### Real-time Microphone Transcription
+### Real-time Microphone Transcription (CLI + Web)
 ```bash
-python3 real_time_transcription.py --diarize --config config.json
+python3 real_time_transcription.py --diarize --web --config config.json
 ```
 
-### Full Feature Set (with Output File)
+### Full Feature Set
 ```bash
-python3 real_time_transcription.py --diarize --config config.json --output transcript.txt
+python3 real_time_transcription.py --diarize --web --config config.json --output transcript.txt
 ```
 
 ### Testing with an Audio File
 ```bash
-python3 real_time_transcription.py --input test.mp3 --diarize --config config.json
+python3 real_time_transcription.py --input test.mp3 --diarize --web --config config.json
 ```
 
 ## 🔧 Command Line Arguments
@@ -60,32 +59,38 @@ python3 real_time_transcription.py --input test.mp3 --diarize --config config.js
 | Argument | Shorthand | Description |
 | :------- | :-------- | :---------- |
 | `--input` | | Path to an audio file to test instead of microphone |
-| `--config` | `-c` | Path to `config.json` for vocabulary and corrections |
+| `--config` | `-c` | Path to `config.json` for vocabulary, corrections, and settings |
 | `--output` | `-o` | Path to save the transcribed text file |
 | `--diarize` | `-d` | Enable real-time speaker identification |
+| `--web` | `-w` | Enable the web dashboard |
+| `--port` | | Web dashboard port (default: 8000) |
+| `--list-devices` | | List available audio devices and exit |
+| `--device` | | Selected input device ID |
+| `--debug-robo` | | Print robotic voice detection stats for debugging |
 
 ## ⚙️ Custom Configuration (`config.json`)
 
-You can provide a JSON file to help the AI with specific terminology:
+You can provide a JSON file to help the AI with specific terminology and behavior:
 
 ```json
 {
-    "vocabulary": ["Faster-Whisper", "GitHub", "Summerville"],
+    "vocabulary": ["Charleston", "Summerville", "EMS ops", "10-4"],
     "corrections": {
         "git hub": "GitHub",
-        "fast whisper": "Faster-Whisper"
+        "EMSOX": "EMS ops"
+    },
+    "settings": {
+        "no_speech_threshold": 0.8,
+        "avg_logprob_cutoff": -0.8,
+        "min_window_sec": 1.0,
+        "max_window_sec": 10.0
     }
 }
 ```
 
-- **Vocabulary**: Words added to the `initial_prompt` to "bias" the model toward these spellings.
-- **Corrections**: A mapping for automated search-and-replace after transcription (useful for common phonetic errors).
-- **Settings**: Tunable AI parameters including:
-    - `no_speech_threshold`: Sensitivity for silence detection (higher = more skeptical).
-    - `compression_ratio_threshold`: Strictness against repetitive text (higher = more tolerant).
-    - `avg_logprob_cutoff`: Confidence floor for a phrase (closer to 0 is higher confidence).
-    - `min_window_sec`: Minimum audio accumulated before a silence-based cut is allowed.
-    - `max_window_sec`: Maximum audio allowed before forcing a transcription cut.
+- **Vocabulary**: Specific terms used to bias the model toward correct spellings.
+- **Corrections**: Automated search-and-replace for common phonetic errors.
+- **Settings**: Tunable AI parameters for silence detection, confidence floors, and windowing.
 
 ## 📜 License
 
