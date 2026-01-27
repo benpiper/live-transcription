@@ -18,11 +18,11 @@ let msgCount = 0;
 // On-demand playback state
 let rawAudioHistory = []; // {timestamp: float, chunk: Float32Array}
 let transcriptionHistory = []; // {id: string, text: string, speaker: string, audio: Float32Array}
-let historyLimit = 10;
 let isPlaybackMuted = false;
 let liveAudioEnabledBeforePlayback = false;
 let activePlaybackSource = null;
 let activePlaybackId = null;
+let watchwords = [];
 
 console.log("App initializing...");
 
@@ -143,6 +143,32 @@ function handleAudioData(data) {
     }
 }
 
+function checkWatchwords(text) {
+    if (watchwords.length === 0) return false;
+    const lowerText = text.toLowerCase();
+    return watchwords.some(word => lowerText.includes(word.toLowerCase()));
+}
+
+function triggerNotification(text) {
+    if (Notification.permission === "granted") {
+        try {
+            const notification = new Notification("Watchword Detected!", {
+                body: text,
+                icon: "/favicon.ico",
+                tag: 'watchword-alert', // Prevents flooding
+                renotify: true
+            });
+
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+            };
+        } catch (e) {
+            console.error("Failed to show notification:", e);
+        }
+    }
+}
+
 function addTranscriptItem(data) {
     // Remove placeholder
     const placeholder = transcriptFeed.querySelector('.placeholder');
@@ -150,6 +176,12 @@ function addTranscriptItem(data) {
 
     const item = document.createElement('div');
     item.className = 'transcript-item';
+
+    // Check for watchwords
+    if (checkWatchwords(data.text)) {
+        item.classList.add('highlight');
+        triggerNotification(data.text);
+    }
 
     // Calculate true latency and extract segment audio
     if (data.origin_time) {
@@ -183,14 +215,10 @@ function addTranscriptItem(data) {
 
             transcriptionHistory.push(historyItem);
 
-            // Limit history
-            const limit = parseInt(document.getElementById('history-limit').value) || 10;
-            while (transcriptionHistory.length > limit) {
-                transcriptionHistory.shift();
-            }
-
             // Add ID for playback lookup
             item.dataset.id = itemId;
+
+            pruneHistory();
         }
     }
 
@@ -202,7 +230,10 @@ function addTranscriptItem(data) {
             <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="timestamp">${data.timestamp}</span>
-                ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
+                <div class="action-buttons">
+                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
+                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                </div>
             </div>
         </div>
         <div class="transcript-text">${data.text}</div>
@@ -225,6 +256,71 @@ function drawVisualizer(peak) {
 
     ctx.fillStyle = gradient;
     ctx.fillRect(10, height - barHeight, width - 20, barHeight);
+}
+
+function downloadSegment(id) {
+    const item = transcriptionHistory.find(h => h.id === id);
+    if (!item) return;
+
+    const buffer = item.audio;
+    const wavData = encodeWAV(buffer, 16000);
+    const blob = new Blob([wavData], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clip_${id.replace('segment-', '')}.wav`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function encodeWAV(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    /* RIFF identifier */
+    writeString(view, 0, 'RIFF');
+    /* file length */
+    view.setUint32(4, 36 + samples.length * 2, true);
+    /* RIFF type */
+    writeString(view, 8, 'WAVE');
+    /* format chunk identifier */
+    writeString(view, 12, 'fmt ');
+    /* format chunk length */
+    view.setUint32(16, 16, true);
+    /* sample format (raw) */
+    view.setUint16(20, 1, true);
+    /* channel count */
+    view.setUint16(22, 1, true);
+    /* sample rate */
+    view.setUint32(24, sampleRate, true);
+    /* byte rate (sample rate * block align) */
+    view.setUint32(28, sampleRate * 2, true);
+    /* block align (channel count * bytes per sample) */
+    view.setUint16(32, 2, true);
+    /* bits per sample */
+    view.setUint16(34, 16, true);
+    /* data chunk identifier */
+    writeString(view, 36, 'data');
+    /* data chunk length */
+    view.setUint32(40, samples.length * 2, true);
+
+    floatTo16BitPCM(view, 44, samples);
+
+    return view;
+}
+
+function floatTo16BitPCM(output, offset, input) {
+    for (let i = 0; i < input.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, input[i]));
+        output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
 }
 
 function playSegment(id) {
@@ -284,5 +380,128 @@ function playSegment(id) {
 
     source.start(0);
 }
+
+function pruneHistory() {
+    const limitInput = document.getElementById('history-limit');
+    const limit = parseInt(limitInput.value) || 10;
+
+    // Save to localStorage
+    localStorage.setItem('history-limit', limit);
+
+    while (transcriptionHistory.length > limit) {
+        const removed = transcriptionHistory.shift();
+        // UI Clean up: Remove action buttons from the DOM for this segment
+        const segmentEl = document.querySelector(`[data-id="${removed.id}"]`);
+        if (segmentEl) {
+            const actionBtns = segmentEl.querySelector('.action-buttons');
+            if (actionBtns) actionBtns.remove();
+        }
+    }
+}
+
+// Initial setup for history limit
+const limitInput = document.getElementById('history-limit');
+if (limitInput) {
+    const savedLimit = localStorage.getItem('history-limit');
+    if (savedLimit) {
+        limitInput.value = savedLimit;
+    } else {
+        limitInput.value = 100; // New default
+    }
+
+    limitInput.addEventListener('input', pruneHistory);
+}
+
+// Watchword Management
+function renderWatchwords() {
+    const list = document.getElementById('watchwords-list');
+    list.innerHTML = '';
+    watchwords.forEach((word, index) => {
+        const tag = document.createElement('div');
+        tag.className = 'tag';
+        tag.innerHTML = `
+            ${word}
+            <span class="remove" onclick="removeWatchword(${index})">×</span>
+        `;
+        list.appendChild(tag);
+    });
+}
+
+function addWatchword() {
+    const input = document.getElementById('watchword-input');
+    const word = input.value.trim();
+    if (word && !watchwords.includes(word)) {
+        watchwords.push(word);
+        localStorage.setItem('watchwords', JSON.stringify(watchwords));
+        renderWatchwords();
+        input.value = '';
+    }
+}
+
+function removeWatchword(index) {
+    watchwords.splice(index, 1);
+    localStorage.setItem('watchwords', JSON.stringify(watchwords));
+    renderWatchwords();
+}
+
+function clearWatchwords() {
+    watchwords = [];
+    localStorage.removeItem('watchwords');
+    renderWatchwords();
+}
+
+// Event Listeners for Watchwords
+document.getElementById('add-watchword').addEventListener('click', addWatchword);
+document.getElementById('watchword-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addWatchword();
+});
+document.getElementById('clear-watchwords').addEventListener('click', clearWatchwords);
+
+// Notification Management
+const notificationBtn = document.getElementById('enable-notifications');
+
+function updateNotificationButton() {
+    if (!notificationBtn) return;
+
+    if (Notification.permission === "granted") {
+        notificationBtn.style.display = 'none';
+    } else {
+        notificationBtn.style.display = 'flex';
+        if (Notification.permission === "denied") {
+            notificationBtn.innerHTML = '⚠️ Notifications Blocked';
+            notificationBtn.style.opacity = '0.6';
+            notificationBtn.style.cursor = 'not-allowed';
+            notificationBtn.title = 'Please enable notifications in your browser settings to receive alerts.';
+        }
+    }
+}
+
+if (notificationBtn) {
+    notificationBtn.addEventListener('click', async () => {
+        if (Notification.permission === 'denied') {
+            alert("Notifications are blocked by your browser. Please enable them in your browser settings (usually in the address bar).");
+            return;
+        }
+
+        const permission = await Notification.requestPermission();
+        updateNotificationButton();
+
+        if (permission === 'granted') {
+            new Notification("Notifications Enabled!", {
+                body: "You will now receive alerts for watchwords.",
+                icon: "/favicon.ico"
+            });
+        }
+    });
+}
+
+// Initialization
+const savedWatchwords = localStorage.getItem('watchwords');
+if (savedWatchwords) {
+    watchwords = JSON.parse(savedWatchwords);
+    renderWatchwords();
+}
+
+updateNotificationButton();
 
 connect();

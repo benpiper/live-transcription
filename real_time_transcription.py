@@ -49,6 +49,7 @@ import re
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 import uvicorn
 import base64
 
@@ -66,14 +67,15 @@ TRANSCRIPTION_CONFIG = {
         "no_speech_prob_cutoff": 0.2,
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
-        "max_window_sec": 5.0
+        "max_window_sec": 5.0,
+        "detect_bots": False
     }
 }
 
 # Load the Faster-Whisper model
 print("Loading faster-whisper model...")
 # Using small.en for a good balance of speed and accuracy
-model = WhisperModel("small.en", device="cpu", compute_type="int8")
+model = WhisperModel("medium.en", device="cpu", compute_type="int8")
 print("Model loaded.")
 
 # Speaker Identification (Optional)
@@ -128,9 +130,14 @@ class SpeakerManager:
     def identify_speaker(self, embedding, audio_chunk=None):
         if not self.speakers:
             label = "Speaker 1"
-            is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
-            if is_robo:
-                label = "Dispatcher (Bot)"
+            
+            # Bot detection (if enabled)
+            do_bot_detection = TRANSCRIPTION_CONFIG["settings"].get("detect_bots", False)
+            if do_bot_detection:
+                is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
+                if is_robo:
+                    label = "Dispatcher (Bot)"
+                    
             self.speakers.append((embedding, label))
             return label
         
@@ -151,7 +158,8 @@ class SpeakerManager:
             # Re-evaluation logic:
             # If the current label is generic ("Speaker X") AND this chunk looks robotic,
             # upgrade the label for all future instances of this speaker.
-            if best_label.startswith("Speaker"):
+            do_bot_detection = TRANSCRIPTION_CONFIG["settings"].get("detect_bots", False)
+            if do_bot_detection and best_label.startswith("Speaker"):
                 is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
                 if is_robo:
                     self.speakers[best_idx] = (self.speakers[best_idx][0], "Dispatcher (Bot)")
@@ -162,9 +170,11 @@ class SpeakerManager:
             new_label = f"Speaker {new_index}"
             
             # Check if this new unique speaker is robotic
-            is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
-            if is_robo:
-                new_label = f"Dispatcher (Bot)"
+            do_bot_detection = TRANSCRIPTION_CONFIG["settings"].get("detect_bots", False)
+            if do_bot_detection:
+                is_robo, *_ = self.is_robotic_voice(audio_chunk) if audio_chunk is not None else (False,)
+                if is_robo:
+                    new_label = f"Dispatcher (Bot)"
                 
             self.speakers.append((embedding, new_label))
             return new_label
@@ -211,7 +221,15 @@ class ConnectionManager:
                 self.disconnect(connection)
 
 ws_manager = ConnectionManager()
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start the WebSocket broadcaster task
+    broadcast_task = asyncio.create_task(websocket_broadcaster())
+    yield
+    # Shutdown: Stop task if needed (asyncio cancels tasks on exit anyway)
+
+app = FastAPI(lifespan=lifespan)
 
 # Background worker for WebSockets
 async def websocket_broadcaster():
@@ -246,10 +264,6 @@ async def websocket_broadcaster():
 @app.get("/ping")
 async def ping():
     return {"status": "ok", "connections": len(ws_manager.active_connections)}
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(websocket_broadcaster())
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -388,19 +402,6 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
         
         combined_prompt = ". ".join(prompt_parts) if prompt_parts else None
 
-        # Speaker Identification
-        speaker_label = ""
-        if speaker_model:
-            try:
-                import torch
-                signal = torch.from_numpy(audio_flat).unsqueeze(0)
-                embeddings = speaker_model.encode_batch(signal)
-                # Squeeze to get [192] from [1, 1, 192]
-                emb = embeddings.squeeze()
-                speaker_label = f" [{speaker_manager.identify_speaker(emb, audio_flat)}]"
-            except Exception as e:
-                print(f"\nSpeaker ID Error: {e}")
-
         settings = TRANSCRIPTION_CONFIG["settings"]
 
         # Transcribe with improved settings to suppress hallucinations
@@ -418,83 +419,113 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
             condition_on_previous_text=False # Prevent hallucinations from bleeding into context
         )
 
-        full_text = ""
+        processed_segments = []
         for segment in segments:
             text_segment = segment.text.strip()
-            
-            # Filter out obvious hallucinations or very low confidence segments
-            # avg_logprob: lower is worse (closer to -inf). -1.0 is a typical cutoff.
-            # no_speech_prob: higher is worse (closer to 1.0).
-            
-            is_hallucination = False
-            hallucination_patterns = [
-                "thank you.", "thanks for watching.", "subscribe", "please subscribe",
-                "welcome back", "my channel", "social media", "I'll see you", 
-                "hey everyone", "thanks for having me", "thanks for having us"
-            ]
-            if any(p in text_segment.lower() for p in hallucination_patterns):
-                is_hallucination = True
-            
-            if not is_hallucination:
-                # Stricter combined confidence check
-                avg_cutoff = settings.get("avg_logprob_cutoff", -0.8)
-                no_speech_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
-                extreme_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
+            if not text_segment:
+                continue
                 
-                if segment.avg_logprob > avg_cutoff and segment.no_speech_prob < no_speech_cutoff:
-                    full_text += segment.text
-                elif segment.avg_logprob > extreme_cutoff: # extremely confident
-                    full_text += segment.text
+            # Hallucination filter
+            hallucination_patterns = ["thank you.", "thanks for watching.", "subscribe", "please subscribe", 
+                                    "welcome back", "my channel", "social media", "I'll see you", 
+                                    "hey everyone", "thanks for having me", "thanks for having us"]
+            if any(p in text_segment.lower() for p in hallucination_patterns):
+                continue
 
-        text = full_text.strip()
-        
-        # Apply post-processing corrections
-        if text and TRANSCRIPTION_CONFIG["corrections"]:
-            for wrong, right in TRANSCRIPTION_CONFIG["corrections"].items():
-                # Case-insensitive replacement using regex for whole words
-                pattern = re.compile(re.escape(wrong), re.IGNORECASE)
-                text = pattern.sub(right, text)
-
-        if text:
-            # Store text for the next segment's prompt
-            transcribe_audio.last_transcript = text
+            # Stricter combined confidence check
+            avg_cutoff = settings.get("avg_logprob_cutoff", -0.8)
+            no_speech_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
+            extreme_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
             
-            # Use the timestamp from when the audio was first captured
-            display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
-            output_line = f"[{display_time}]{speaker_label} {text}"
-            
-            # Diagnostic robotic print if enabled
-            if getattr(args, "debug_robo", False):
-                is_robo, f0_m, f0_s, flat = speaker_manager.is_robotic_voice(audio_flat)
-                debug_info = f"\n[RoboDebug] Mean: {f0_m:.1f}, Std: {f0_s:.2f}, Flat: {flat:.4f} | Label: {speaker_label.strip()}"
-                sys.stdout.write("\r" + " " * 80 + "\r")
-                print(debug_info)
+            if not (segment.avg_logprob > avg_cutoff and segment.no_speech_prob < no_speech_cutoff) and not (segment.avg_logprob > extreme_cutoff):
+                continue
 
-            # Broadcast to web clients via queue
-            try:
-                broadcast_queue.put({
-                    "type": "transcript",
-                    "timestamp": display_time,
-                    "origin_time": start_time.timestamp(), # Send raw timestamp for latency calculation
-                    "speaker": speaker_label.strip(" []"),
-                    "text": text
-                })
-            except:
-                pass
-
-            # Clear the visualizer line
-            sys.stdout.write("\r" + " " * 80 + "\r")
-            print(output_line)
+            # -- SEGMENT ANALYSIS --
+            # Slice the audio for this specific sentence
+            start_sample = int(segment.start * SAMPLE_RATE)
+            end_sample = int(segment.end * SAMPLE_RATE)
+            audio_slice = audio_flat[start_sample:end_sample]
             
-            # Write to file if enabled
-            output_file = getattr(transcribe_audio, "output_file", None)
-            if output_file:
+            seg_speaker_label = "Unknown"
+            if speaker_model and len(audio_slice) >= 8000: # At least 0.5s for speaker ID
                 try:
-                    with open(output_file, "a", encoding="utf-8") as f:
-                        f.write(output_line + "\n")
-                        f.flush()
-                except Exception as e:
-                    print(f"\nError writing to output file: {e}")
+                    import torch
+                    signal = torch.from_numpy(audio_slice).unsqueeze(0)
+                    embeddings = speaker_model.encode_batch(signal)
+                    emb = embeddings.squeeze()
+                    seg_speaker_label = speaker_manager.identify_speaker(emb, audio_slice)
+                except:
+                    pass
+            
+            # Apply corrections to text
+            text = text_segment
+            if TRANSCRIPTION_CONFIG["corrections"]:
+                for wrong, right in TRANSCRIPTION_CONFIG["corrections"].items():
+                    pattern = re.compile(re.escape(wrong), re.IGNORECASE)
+                    text = pattern.sub(right, text)
+            
+            processed_segments.append({
+                "speaker": seg_speaker_label,
+                "text": text,
+                "start": segment.start,
+                "end": segment.end
+            })
+
+        if processed_segments:
+            # Group identical consecutive speakers to keep output clean
+            merged = []
+            for seg in processed_segments:
+                if merged and merged[-1]["speaker"] == seg["speaker"]:
+                    merged[-1]["text"] += " " + seg["text"]
+                    merged[-1]["end"] = seg["end"]
+                else:
+                    merged.append(seg)
+
+            display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            for m in merged:
+                speaker_tag = f" [{m['speaker']}]"
+                output_line = f"[{display_time}]{speaker_tag} {m['text']}"
+                
+                # Diagnostic robotic print if enabled (only if speaker is robotic)
+                if getattr(args, "debug_robo", False):
+                    # We run it on the merged chunk
+                    start_s = int(m['start'] * SAMPLE_RATE)
+                    end_s = int(m['end'] * SAMPLE_RATE)
+                    chunk_slice = audio_flat[start_s:end_s]
+                    is_robo, f0_m, f0_s, flat = speaker_manager.is_robotic_voice(chunk_slice)
+                    if is_robo:
+                        debug_info = f"\n[RoboDebug] Segment Mean: {f0_m:.1f}, Std: {f0_s:.2f}, Flat: {flat:.4f} | Label: {m['speaker']}"
+                        sys.stdout.write("\r" + " " * 80 + "\r")
+                        print(debug_info)
+
+                # Broadcast to web clients
+                try:
+                    broadcast_queue.put({
+                        "type": "transcript",
+                        "timestamp": display_time,
+                        "origin_time": start_time.timestamp() + m['start'],
+                        "speaker": m['speaker'],
+                        "text": m['text']
+                    })
+                except:
+                    pass
+
+                # Print and log
+                sys.stdout.write("\r" + " " * 80 + "\r")
+                print(output_line)
+                
+                output_file = getattr(transcribe_audio, "output_file", None)
+                if output_file:
+                    try:
+                        with open(output_file, "a", encoding="utf-8") as f:
+                            f.write(output_line + "\n")
+                            f.flush()
+                    except Exception as e:
+                        print(f"\nError writing to output file: {e}")
+            
+            # Store last text for prompt context
+            transcribe_audio.last_transcript = " ".join([m['text'] for m in merged])
 
     # Store the last 0.5s as context for the next chunk
     context_samples = int(0.5 * SAMPLE_RATE)

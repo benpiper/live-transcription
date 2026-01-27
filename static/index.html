@@ -60,12 +60,30 @@
                     </div>
                 </section>
 
+                <section class="watchword-section">
+                    <div class="section-header">
+                        <h3>Watchwords</h3>
+                        <button id="clear-watchwords" class="btn-text">Clear All</button>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="watchword-input" placeholder="Add word or phrase...">
+                        <button id="add-watchword" class="btn-add">+</button>
+                    </div>
+                    <div id="watchwords-list" class="tag-list">
+                        <!-- Watchword tags will appear here -->
+                    </div>
+                    <button id="enable-notifications" class="btn-secondary full-width"
+                        style="display: none; margin-top: 12px;">
+                        🔔 Enable Desktop Alerts
+                    </button>
+                </section>
+
                 <section class="config-section">
                     <h3>Settings</h3>
                     <div class="stat-item full">
                         <label>Audio History</label>
                         <div class="input-group">
-                            <input type="number" id="history-limit" value="10" min="1" max="50">
+                            <input type="number" id="history-limit" value="100" min="1" max="500">
                             <span>Segments</span>
                         </div>
                     </div>

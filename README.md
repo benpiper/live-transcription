@@ -101,6 +101,7 @@ You can provide a JSON file to help the AI with specific terminology and behavio
     - `max_window_sec`: Maximum duration audio can accumulate before the system forces a transcription. Effectively the "max sentence length." Default: `10.0`.
     - `beam_size`: Number of beams to use in the Search. Higher values (e.g., `5`) increase accuracy but increase CPU usage.
     - `min_silence_duration_ms`: Duration of silence (in ms) required for the VAD filter to consider a segment "finished." Default: `500`.
+    - `detect_bots`: (boolean) Enable automatic detection and labeling of synthetic/robotic voices as `[Dispatcher (Bot)]`. Default: `false`.
 
 ## 📜 License
 

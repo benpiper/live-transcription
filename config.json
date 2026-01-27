@@ -5,14 +5,17 @@
         "police",
         "ems",
         "scanner",
+        "channel",
         "radio",
         "Trolley",
+        "Bacon's",
         "Dorchester",
         "Summerville",
         "Charleston",
         "Berkeley",
         "Colleton",
         "EMS ops",
+        "incident",
         "10 codes",
         "10-4",
         "10-17",
@@ -38,6 +41,7 @@
         "Echo",
         "Foxtrot",
         "Golf",
+        "Mike",
         "Structure fire",
         "Engine",
         "Ladder",
@@ -69,7 +73,6 @@
         "Blood pressure",
         "Respiratory",
         "Cardiac",
-        "Protocol",
         "Triage"
     ],
     "corrections": {
@@ -97,6 +100,7 @@
         "no_speech_prob_cutoff": 0.2,
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
-        "max_window_sec": 10.0
+        "max_window_sec": 20.0,
+        "detect_bots": false
     }
 }
