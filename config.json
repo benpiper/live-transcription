@@ -102,7 +102,7 @@
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 0.5,
         "max_window_sec": 15.0,
-        "noise_floor": 0.0,
+        "noise_floor": 0.001,
         "detect_bots": false
     }
 }

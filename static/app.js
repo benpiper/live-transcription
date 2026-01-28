@@ -23,6 +23,7 @@ let liveAudioEnabledBeforePlayback = false;
 let activePlaybackSource = null;
 let activePlaybackId = null;
 let watchwords = [];
+let theme = 'dark';
 
 console.log("App initializing...");
 
@@ -254,8 +255,13 @@ function drawVisualizer(peak) {
 
     const barHeight = peak * height * 5;
     const gradient = ctx.createLinearGradient(0, height, 0, 0);
-    gradient.addColorStop(0, '#38bdf8');
-    gradient.addColorStop(1, '#818cf8');
+
+    // Fetch colors from CSS variables
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+
+    gradient.addColorStop(0, primaryColor || '#38bdf8');
+    gradient.addColorStop(1, accentColor || '#818cf8');
 
     ctx.fillStyle = gradient;
     ctx.fillRect(10, height - barHeight, width - 20, barHeight);
@@ -462,7 +468,7 @@ if (limitInput) {
     if (savedLimit) {
         limitInput.value = savedLimit;
     } else {
-        limitInput.value = 100; // New default
+        limitInput.value = 60; // New default
     }
 
     limitInput.addEventListener('input', pruneHistory);
@@ -551,7 +557,25 @@ if (notificationBtn) {
     });
 }
 
+// Theme Management
+const themeToggle = document.getElementById('theme-toggle');
+const themeIcon = document.getElementById('theme-icon');
+
+function setTheme(newTheme) {
+    theme = newTheme;
+    document.documentElement.setAttribute('data-theme', theme);
+    themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+    localStorage.setItem('theme', theme);
+}
+
+themeToggle.addEventListener('click', () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+});
+
 // Initialization
+const savedTheme = localStorage.getItem('theme') || 'dark';
+setTheme(savedTheme);
+
 const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
