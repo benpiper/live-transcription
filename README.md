@@ -92,16 +92,20 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 - **Vocabulary**: Specific terms used to bias the model toward correct spellings.
 - **Corrections**: Automated search-and-replace for common phonetic errors.
 - **Settings**: Tunable AI parameters for fine-tuning the transcription engine:
-    - `no_speech_threshold`: (0.0 to 1.0) Sensitivity of the internal VAD. Higher values are more skeptical of quiet sounds, reducing hallucinations but potentially missing soft speech. Default: `0.8`.
-    - `compression_ratio_threshold`: (1.0 to 2.4) Used to detect repetitive text loops. If the text is too repetitive, it's discarded. Default: `2.4`.
-    - `avg_logprob_cutoff`: (-inf to 0) The average log-probability of tokens in a segment. Closer to 0 is more confident. Segments below this are filtered out. Default: `-0.8`.
-    - `no_speech_prob_cutoff`: (0.0 to 1.0) Maximum probability that a segment is actually silence. If higher than this, the segment is rejected. Default: `0.2`.
-    - `extreme_confidence_cutoff`: (-inf to 0) If a segment is extremely confident (e.g., `-0.4`), it will bypass the `no_speech_prob` check entirely.
-    - `min_window_sec`: Minimum duration of audio to accumulate before allowing a silence-based transcription trigger. Prevents many small, broken segments. Default: `1.0`.
-    - `max_window_sec`: Maximum duration audio can accumulate before the system forces a transcription. Effectively the "max sentence length." Default: `10.0`.
-    - `beam_size`: Number of beams to use in the Search. Higher values (e.g., `5`) increase accuracy but increase CPU usage.
-    - `min_silence_duration_ms`: Duration of silence (in ms) required for the VAD filter to consider a segment "finished." Default: `500`.
-    - `detect_bots`: (boolean) Enable automatic detection and labeling of synthetic/robotic voices as `[Dispatcher (Bot)]`. Default: `false`.
+
+| Parameter | Default | Range | Description |
+| :--- | :--- | :--- | :--- |
+| `no_speech_threshold` | `0.6` | `0.0` - `1.0` | **(Higher = More Strict)**. Internal VAD sensitivity. If the probability that a segment is silence is *higher* than this, it's ignored. Increase if you see "phantom" text; decrease if the model skips soft speech. |
+| `log_prob_threshold` | `-1.0` | `-inf` - `0.0` | **(Higher = More Strict)**. Whisper internal retry threshold. If tokens fall *below* this, the model retries with higher randomness. **Warning**: High values can increase latency by 5x due to re-processing attempts. |
+| `compression_ratio_threshold` | `2.4` | `1.0` - `inf` | **(Lower = More Strict)**. Detects repetitive "loops." If the ratio is *higher* than this, the segment is rejected. Lower values (e.g., `1.8`) are aggressive at killing hallucinations. |
+| `avg_logprob_cutoff` | `-0.8` | `-inf` - `0.0` | **(Higher = More Strict)**. The final confidence cut-off for the transcribed sentence. Closer to `0` is better. Lower to `-1.5` if you want "best guess" output for noisy audio. |
+| `no_speech_prob_cutoff` | `0.2` | `0.0` - `1.0` | **(Lower = More Strict)**. Maximum probability that a segment is silence. If the model's "silence score" is *higher* than this, it's rejected. |
+| `extreme_confidence_cutoff` | `-0.4` | `-inf` - `0.0` | **(Higher = More Strict)**. If a segment's confidence is *better* (higher) than this, it bypasses the `no_speech_prob` check completely. (Prevents short commands from being filtered). |
+| `min_window_sec` | `1.0` | `0.0`+ | How long to wait for a natural pause before attempting transcription. |
+| `max_window_sec` | `10.0` | `min_window_sec`+ | **(Lower = Faster Updates)**. Force transcription if no pause is found. Lowering to `5.0` provides faster UI updates but may cut off speakers mid-sentence. |
+| `beam_size` | `5` | `1` - `20` | **(Higher = More Accurate)**. Number of parallel search paths. `5` is balanced; `10` is very accurate but doubles CPU/GPU load. |
+| `min_silence_duration_ms` | `500` | `0`+ | How long a silence gap must be to trigger the end of a sentence. |
+| `detect_bots` | `false` | `true` / `false` | When enabled, analyzes acoustic profiles to identify synthetic/robotic voices (AI dispatchers) and labels them as `[Dispatcher (Bot)]`. |
 
 ## 📜 License
 

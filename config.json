@@ -73,7 +73,8 @@
         "Blood pressure",
         "Respiratory",
         "Cardiac",
-        "Triage"
+        "Triage",
+        "MUSC"
     ],
     "corrections": {
         "Old Charlie": "Old Trolley",
@@ -91,16 +92,16 @@
         "nite": "ninth"
     },
     "settings": {
-        "no_speech_threshold": 0.7,
-        "log_prob_threshold": -0.8,
-        "compression_ratio_threshold": 2.4,
-        "beam_size": 5,
+        "no_speech_threshold": 0.6,
+        "log_prob_threshold": 0.0,
+        "compression_ratio_threshold": 3.0,
+        "beam_size": 4,
         "min_silence_duration_ms": 500,
-        "avg_logprob_cutoff": -0.8,
+        "avg_logprob_cutoff": -1.5,
         "no_speech_prob_cutoff": 0.2,
         "extreme_confidence_cutoff": -0.4,
-        "min_window_sec": 1.0,
-        "max_window_sec": 20.0,
+        "min_window_sec": 0.5,
+        "max_window_sec": 15.0,
         "detect_bots": false
     }
 }
