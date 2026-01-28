@@ -68,6 +68,42 @@ python3 real_time_transcription.py --input test.mp3 --diarize --web --config con
 | `--device` | | Selected input device ID |
 | `--debug-robo` | | Print robotic voice detection stats for debugging |
 
+## 🏗️ System Architecture
+
+The application is built with a multi-threaded, asynchronous design to ensure real-time performance and low-latency audio handling.
+
+### 1. Data Flow & Threading
+
+The system operates using three primary threads/processes coordinating via thread-safe queues:
+
+- **Audio Capture Thread**: Captures raw PCM audio from the microphone (using `sounddevice`) or reads from a file and pushes it into the `audio_queue`.
+- **Transcription Engine Thread**: 
+  - Monitors the `audio_queue` for incoming data.
+  - Applies a **Noise Floor Gate** to skip silence.
+  - Performs **VAD-aware chunking** to find natural speech boundaries.
+  - Generates transcriptions using `faster-whisper`.
+  - Performs **Speaker Diarization** and **Robotic Voice Detection** on-the-fly.
+  - Pushes processed results into the `broadcast_queue`.
+- **FastAPI/Uvicorn Backend (Main Thread)**:
+  - Serves the static web dashboard.
+  - Manages WebSocket connections for real-time clients.
+  - **Broadcaster Worker**: Continuously drains the `broadcast_queue` and relays results to all connected clients.
+
+### 2. WebSocket Communication
+
+The communication between the Web UI and Backend uses a single WebSocket connection on `/ws`:
+
+| Data Type | format | Content |
+| :--- | :--- | :--- |
+| **Transcription** | JSON | The text, speaker label, timestamp, and performance telemetry. |
+| **Audio Stream** | Binary | Raw `Float32Array` chunks sent at 16,000Hz for live visualization and history playback. |
+
+### 3. Frontend Implementation
+
+- **Web Audio API**: Used to manage the live audio stream, synchronize playback of history segments, and handle volume normalization.
+- **Canvas API**: Provides the high-frequency volume visualizer reacting to the binary audio stream.
+- **LocalStorage**: Persists your theme settings, watchwords, and recent transcription history (text-only) across page refreshes.
+
 ## ⚙️ Custom Configuration (`config.json`)
 
 You can provide a JSON file to help the AI with specific terminology and behavior:
