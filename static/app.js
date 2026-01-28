@@ -112,8 +112,8 @@ function handleAudioData(data) {
     const now = Date.now() / 1000;
     rawAudioHistory.push({ timestamp: now, chunk: floatData });
 
-    // Prune raw buffer (30s window)
-    const windowSec = 30;
+    // Prune raw buffer (120s window to handle long transcription latency)
+    const windowSec = 120;
     while (rawAudioHistory.length > 0 && rawAudioHistory[0].timestamp < now - windowSec) {
         rawAudioHistory.shift();
     }
@@ -204,7 +204,7 @@ function addTranscriptItem(data) {
                 offset += chunk.length;
             }
 
-            const itemId = `segment-${Date.now()}`;
+            const itemId = `segment-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
             const historyItem = {
                 id: itemId,
                 speaker: data.speaker,
@@ -218,7 +218,10 @@ function addTranscriptItem(data) {
             // Add ID for playback lookup
             item.dataset.id = itemId;
 
+            saveHistoryToLocal();
             pruneHistory();
+        } else {
+            console.warn(`No audio chunks found for segment starting at ${data.origin_time}. Buffer range: ${rawAudioHistory.length > 0 ? rawAudioHistory[0].timestamp : 'empty'} to ${rawAudioHistory.length > 0 ? rawAudioHistory[rawAudioHistory.length - 1].timestamp : 'empty'}`);
         }
     }
 
@@ -397,6 +400,59 @@ function pruneHistory() {
             if (actionBtns) actionBtns.remove();
         }
     }
+    saveHistoryToLocal();
+}
+
+function saveHistoryToLocal() {
+    // Only save the text/metadata, audio is too large for localStorage
+    const historyToSave = transcriptionHistory.map(h => ({
+        id: h.id,
+        speaker: h.speaker,
+        text: h.text,
+        timestamp: h.timestamp
+    }));
+    localStorage.setItem('transcription-history', JSON.stringify(historyToSave));
+}
+
+function loadHistoryFromLocal() {
+    const saved = localStorage.getItem('transcription-history');
+    if (saved) {
+        try {
+            const items = JSON.parse(saved);
+            items.forEach(item => {
+                // Add to feed but without audio capability (since we can't save audio)
+                renderHistoryItemIndividually(item);
+            });
+        } catch (e) {
+            console.error("Error loading history:", e);
+        }
+    }
+}
+
+function renderHistoryItemIndividually(data) {
+    const placeholder = transcriptFeed.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const item = document.createElement('div');
+    item.className = 'transcript-item';
+
+    // Check for watchwords (mostly for color)
+    if (checkWatchwords(data.text)) {
+        item.classList.add('highlight');
+    }
+
+    item.innerHTML = `
+        <div class="transcript-header">
+            <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
+            <div class="timestamp-wrapper">
+                <span class="timestamp">${data.timestamp}</span>
+                <span class="text-muted" style="font-size: 0.7rem; margin-left: 8px;">(Archive)</span>
+            </div>
+        </div>
+        <div class="transcript-text">${data.text}</div>
+    `;
+
+    transcriptFeed.appendChild(item);
 }
 
 // Initial setup for history limit
@@ -502,6 +558,7 @@ if (savedWatchwords) {
     renderWatchwords();
 }
 
+loadHistoryFromLocal();
 updateNotificationButton();
 
 connect();

@@ -38,6 +38,7 @@ setup_cuda_paths()
 import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
+import torch
 import queue
 import threading
 from datetime import datetime
@@ -68,15 +69,19 @@ TRANSCRIPTION_CONFIG = {
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
         "max_window_sec": 5.0,
-        "detect_bots": False
+        "detect_bots": False,
+        "cpu_threads": 4,
+        "noise_floor": 0.001
     }
 }
 
 # Load the Faster-Whisper model
 print("Loading faster-whisper model...")
-# Using small.en for a good balance of speed and accuracy
-model = WhisperModel("medium.en", device="cpu", compute_type="int8")
-print("Model loaded.")
+# Using a thread-limited model to prevent CPU exhaustion
+initial_settings = TRANSCRIPTION_CONFIG["settings"]
+num_threads = initial_settings.get("cpu_threads", 4)
+model = WhisperModel("medium.en", device="cpu", compute_type="int8", cpu_threads=num_threads)
+print(f"Model loaded (Threads: {num_threads}).")
 
 # Speaker Identification (Optional)
 speaker_model = None
@@ -256,7 +261,7 @@ async def websocket_broadcaster():
                 except queue.Empty:
                     break
                     
-            await asyncio.sleep(0.01) # Low latency check
+            await asyncio.sleep(0.05) # Increased from 0.01 to reduce idle CPU
         except Exception as e:
             print(f"Broadcaster Error: {e}")
             await asyncio.sleep(1)
@@ -369,6 +374,17 @@ def transcribe_audio():
         if not should_transcribe:
             continue
 
+        # Aggressive silence gate for the entire block
+        total_audio = np.concatenate(active_buffer)
+        total_vol = np.linalg.norm(total_audio) / np.sqrt(len(total_audio))
+        
+        # Noise floor gating: if the entire block is extremely quiet, skip all heavy processing
+        noise_floor = settings.get("noise_floor", 0.001)
+        if total_vol < noise_floor: 
+            active_buffer = []
+            start_time = None
+            continue
+
         prev_context = transcribe_chunk(active_buffer, prev_context, start_time)
         active_buffer = []
 
@@ -405,19 +421,24 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
         settings = TRANSCRIPTION_CONFIG["settings"]
 
         # Transcribe with improved settings to suppress hallucinations
-        segments, info = model.transcribe(
-            audio_flat, 
-            beam_size=settings.get("beam_size", 5),
-            language="en",
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=settings.get("min_silence_duration_ms", 500)),
-            initial_prompt=combined_prompt,
-            # Suppress hallucinations
-            no_speech_threshold=settings.get("no_speech_threshold", 0.8),
-            log_prob_threshold=settings.get("log_prob_threshold", -0.8),
-            compression_ratio_threshold=settings.get("compression_ratio_threshold", 2.4),
-            condition_on_previous_text=False # Prevent hallucinations from bleeding into context
-        )
+        # Safety guard for transcription model execution
+        try:
+            segments, info = model.transcribe(
+                audio_flat, 
+                beam_size=settings.get("beam_size", 5),
+                language="en",
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=settings.get("min_silence_duration_ms", 500)),
+                initial_prompt=combined_prompt,
+                # Suppress hallucinations
+                no_speech_threshold=settings.get("no_speech_threshold", 0.8),
+                log_prob_threshold=settings.get("log_prob_threshold", -0.8),
+                compression_ratio_threshold=settings.get("compression_ratio_threshold", 2.4),
+                condition_on_previous_text=False # Prevent hallucinations from bleeding into context
+            )
+        except Exception as e:
+            print(f"\n[CRITICAL] Transcription model error: {e}")
+            return prev_context
 
         processed_segments = []
         for segment in segments:
@@ -449,7 +470,6 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
             seg_speaker_label = "Unknown"
             if speaker_model and len(audio_slice) >= 8000: # At least 0.5s for speaker ID
                 try:
-                    import torch
                     signal = torch.from_numpy(audio_slice).unsqueeze(0)
                     embeddings = speaker_model.encode_batch(signal)
                     emb = embeddings.squeeze()

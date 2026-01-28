@@ -106,6 +106,7 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `beam_size` | `5` | `1` - `20` | **(Higher = More Accurate)**. Number of parallel search paths. `5` is balanced; `10` is very accurate but doubles CPU/GPU load. |
 | `min_silence_duration_ms` | `500` | `0`+ | How long a silence gap must be to trigger the end of a sentence. |
 | `detect_bots` | `false` | `true` / `false` | When enabled, analyzes acoustic profiles to identify synthetic/robotic voices (AI dispatchers) and labels them as `[Dispatcher (Bot)]`. |
+| `noise_floor` | `0.001` | `0.0` - `1.0` | **(Higher = More Strict)**. The minimum audio volume required to trigger a transcription. Blocks below this level skip all heavy processing to save CPU. |
 
 ## 📜 License
 
