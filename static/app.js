@@ -560,6 +560,8 @@ if (notificationBtn) {
 // Theme Management
 const themeToggle = document.getElementById('theme-toggle');
 const themeIcon = document.getElementById('theme-icon');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const sidebar = document.querySelector('.sidebar');
 
 function setTheme(newTheme) {
     theme = newTheme;
@@ -570,6 +572,20 @@ function setTheme(newTheme) {
 
 themeToggle.addEventListener('click', () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
+});
+
+sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('active');
+    sidebarToggle.classList.toggle('active');
+    sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span>×</span>' : '<span>⚙️</span>';
+});
+
+// Close sidebar on small screens when clicking outside (on the feed)
+document.querySelector('.feed-section').addEventListener('click', () => {
+    if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
+        sidebar.classList.remove('active');
+        sidebarToggle.innerHTML = '<span>⚙️</span>';
+    }
 });
 
 // Initialization
