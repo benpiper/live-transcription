@@ -526,35 +526,61 @@ function updateNotificationButton() {
     if (!notificationBtn) return;
 
     if (Notification.permission === "granted") {
-        notificationBtn.style.display = 'none';
-    } else {
+        notificationBtn.innerHTML = '🔔 Send Test Alert';
+        notificationBtn.classList.remove('btn-secondary');
+        notificationBtn.classList.add('btn-text'); // Subtle style
+        notificationBtn.style.opacity = '0.8';
+        notificationBtn.title = 'Click to send a test notification to verify alerts are working.';
+    } else if (Notification.permission === "denied") {
+        notificationBtn.innerHTML = '⚠️ Desktop Alerts Blocked';
         notificationBtn.style.display = 'flex';
-        if (Notification.permission === "denied") {
-            notificationBtn.innerHTML = '⚠️ Notifications Blocked';
-            notificationBtn.style.opacity = '0.6';
-            notificationBtn.style.cursor = 'not-allowed';
-            notificationBtn.title = 'Please enable notifications in your browser settings to receive alerts.';
-        }
+        notificationBtn.style.opacity = '0.6';
+        notificationBtn.style.cursor = 'not-allowed';
+        notificationBtn.title = 'Notifications are blocked in your browser settings. Click for help on how to unblock.';
+    } else {
+        notificationBtn.innerHTML = '🔔 Enable Desktop Alerts';
+        notificationBtn.style.display = 'flex';
+        notificationBtn.style.opacity = '1';
+        notificationBtn.style.cursor = 'pointer';
     }
 }
 
 if (notificationBtn) {
     notificationBtn.addEventListener('click', async () => {
-        if (Notification.permission === 'denied') {
-            alert("Notifications are blocked by your browser. Please enable them in your browser settings (usually in the address bar).");
+        if (Notification.permission === 'granted') {
+            // Already granted: Send test notification
+            triggerNotification("This is a test notification! Alerts are working correctly.");
             return;
         }
 
+        if (Notification.permission === 'denied') {
+            const browser = getBrowserName();
+            const msg = `Notifications are blocked by your ${browser} settings.\n\n` +
+                `How to fix:\n` +
+                `1. Click the 'Locks/Settings' icon next to the URL in the address bar.\n` +
+                `2. Change the 'Notifications' setting to 'Allow'.\n` +
+                `3. Refresh this page.`;
+            alert(msg);
+            return;
+        }
+
+        // Default state: Request permission
         const permission = await Notification.requestPermission();
         updateNotificationButton();
 
         if (permission === 'granted') {
-            new Notification("Notifications Enabled!", {
-                body: "You will now receive alerts for watchwords.",
-                icon: "/favicon.ico"
-            });
+            triggerNotification("Notifications Enabled! You will now receive alerts for watchwords.");
         }
     });
+}
+
+function getBrowserName() {
+    const userAgent = navigator.userAgent;
+    if (userAgent.match(/chrome|chromium|crios/i)) return "Chrome";
+    if (userAgent.match(/firefox|fxios/i)) return "Firefox";
+    if (userAgent.match(/safari/i)) return "Safari";
+    if (userAgent.match(/edge/i)) return "Edge";
+    return "browser";
 }
 
 // Theme Management
