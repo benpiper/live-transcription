@@ -385,10 +385,34 @@ def transcribe_audio():
             start_time = None
             continue
 
-        prev_context = transcribe_chunk(active_buffer, prev_context, start_time)
+        # Telemetry: Check queue backlog
+        qsize = audio_queue.qsize()
+        skip_diarization = qsize > 10
+        
+        t0 = time.time()
+        prev_context = transcribe_chunk(active_buffer, prev_context, start_time, skip_diarization=skip_diarization)
+        t_proc = time.time() - t0
+        
+        # Real-time factor: Processing time / Audio duration
+        rtf = t_proc / buffer_duration
+        
+        # Console reporting for the user
+        status_line = f"\n [Telemetry] Backlog: {qsize} chunks | Proc: {t_proc:.2f}s | Audio: {buffer_duration:.2f}s | RTF: {rtf:.2f}"
+        if skip_diarization:
+            status_line += " | [!] DIARIZATION SKIPPED TO CATCH UP"
+        
+        # Only print telemetry if lagging or periodically
+        if rtf > 1.0 or qsize > 0 or not hasattr(transcribe_audio, "chunk_count") or transcribe_audio.chunk_count % 10 == 0:
+            sys.stdout.write(status_line + "\n")
+            sys.stdout.flush()
+            
+        if not hasattr(transcribe_audio, "chunk_count"):
+            transcribe_audio.chunk_count = 0
+        transcribe_audio.chunk_count += 1
+        
         active_buffer = []
 
-def transcribe_chunk(active_buffer, prev_context, start_time):
+def transcribe_chunk(active_buffer, prev_context, start_time, skip_diarization=False):
     """Helper to process a buffer of audio data."""
     # Prepare audio data
     audio_data = np.concatenate(active_buffer)
@@ -468,7 +492,7 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
             audio_slice = audio_flat[start_sample:end_sample]
             
             seg_speaker_label = "Unknown"
-            if speaker_model and len(audio_slice) >= 8000: # At least 0.5s for speaker ID
+            if speaker_model and not skip_diarization and len(audio_slice) >= 8000: # At least 0.5s for speaker ID
                 try:
                     signal = torch.from_numpy(audio_slice).unsqueeze(0)
                     embeddings = speaker_model.encode_batch(signal)
@@ -476,6 +500,8 @@ def transcribe_chunk(active_buffer, prev_context, start_time):
                     seg_speaker_label = speaker_manager.identify_speaker(emb, audio_slice)
                 except:
                     pass
+            elif skip_diarization:
+                seg_speaker_label = "Unknown Speaker"
             
             # Apply corrections to text
             text = text_segment
