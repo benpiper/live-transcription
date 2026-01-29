@@ -247,6 +247,31 @@ main {
     color: #10b981;
     animation: pulse 1s infinite;
 }
+/* Confidence Indicators */
+.confidence {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.conf-high {
+    color: #4ade80; /* Green */
+    border-color: rgba(74, 222, 128, 0.2);
+}
+
+.conf-med {
+    color: #fbbf24; /* Amber */
+    border-color: rgba(251, 191, 36, 0.2);
+}
+
+.conf-low {
+    color: #f87171; /* Red */
+    border-color: rgba(248, 113, 113, 0.2);
+}
 
 .timestamp {
     font-family: 'JetBrains Mono', monospace;

@@ -305,9 +305,25 @@ def audio_callback(indata, frames, time_info, status):
         # print(f"\nDebug: Audio callback firing (vol: {current_volume:.4f})") # Hidden but helpful for local debugging if needed
         audio_callback.last_debug = time.time()
 
-    # Broadcast to web clients via queue
+    # Broadcast to web clients via queue ONLY if above noise floor or periodically
     try:
-        audio_broadcast_queue.put(indata.flatten().astype(np.float32).tobytes())
+        settings = TRANSCRIPTION_CONFIG["settings"]
+        noise_floor = settings.get("noise_floor", 0.001)
+        
+        # We also need to send a periodic ping even if quiet to let the UI know we're alive
+        now = time.time()
+        last_broadcast = getattr(audio_callback, "last_vol_broadcast", 0)
+        
+        if current_volume >= noise_floor:
+            audio_broadcast_queue.put(indata.flatten().astype(np.float32).tobytes())
+            audio_callback.last_vol_broadcast = now
+        elif now - last_broadcast > 2.0:
+            # Send a small JSON volume update instead of raw bytes
+            broadcast_queue.put({
+                "type": "volume",
+                "peak": float(current_volume)
+            })
+            audio_callback.last_vol_broadcast = now
     except:
         pass
 
@@ -514,7 +530,8 @@ def transcribe_chunk(active_buffer, prev_context, start_time, skip_diarization=F
                 "speaker": seg_speaker_label,
                 "text": text,
                 "start": segment.start,
-                "end": segment.end
+                "end": segment.end,
+                "confidence": segment.avg_logprob # Capture Whisper's log probability
             })
 
         if processed_segments:
@@ -522,16 +539,26 @@ def transcribe_chunk(active_buffer, prev_context, start_time, skip_diarization=F
             merged = []
             for seg in processed_segments:
                 if merged and merged[-1]["speaker"] == seg["speaker"]:
+                    # Average the confidence scores
+                    prev_count = merged[-1].get("_seg_count", 1)
+                    curr_conf = merged[-1].get("confidence", 0)
+                    new_conf = (curr_conf * prev_count + seg["confidence"]) / (prev_count + 1)
+                    
                     merged[-1]["text"] += " " + seg["text"]
                     merged[-1]["end"] = seg["end"]
+                    merged[-1]["confidence"] = new_conf
+                    merged[-1]["_seg_count"] = prev_count + 1
                 else:
+                    seg["_seg_count"] = 1
                     merged.append(seg)
 
             display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
             
             for m in merged:
                 speaker_tag = f" [{m['speaker']}]"
-                output_line = f"[{display_time}]{speaker_tag} {m['text']}"
+                conf_val = m.get("confidence", 0)
+                conf_tag = f" (conf: {conf_val:.2f})"
+                output_line = f"[{display_time}]{speaker_tag}{conf_tag} {m['text']}"
                 
                 # Diagnostic robotic print if enabled (only if speaker is robotic)
                 if getattr(args, "debug_robo", False):
@@ -552,7 +579,8 @@ def transcribe_chunk(active_buffer, prev_context, start_time, skip_diarization=F
                         "timestamp": display_time,
                         "origin_time": start_time.timestamp() + m['start'],
                         "speaker": m['speaker'],
-                        "text": m['text']
+                        "text": m['text'],
+                        "confidence": m.get("confidence", 0)
                     })
                 except:
                     pass

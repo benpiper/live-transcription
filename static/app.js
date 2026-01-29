@@ -85,6 +85,11 @@ function connect() {
                 if (data.type === 'transcript') {
                     console.log("Received transcript:", data.text);
                     addTranscriptItem(data);
+                } else if (data.type === 'volume') {
+                    // Update visualizer peak even during streaming silence
+                    drawVisualizer(data.peak);
+                    volLevel.textContent = data.peak.toFixed(4);
+                    volStatus.textContent = data.peak > 0.004 ? 'Active' : 'Quiet';
                 }
             } catch (e) {
                 console.error("Error parsing JSON message:", e);
@@ -229,10 +234,17 @@ function addTranscriptItem(data) {
     speakers.add(data.speaker);
     document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
 
+    // Confidence styling
+    const confidence = data.confidence || 0;
+    let confClass = 'conf-high';
+    if (confidence < -1.0) confClass = 'conf-low';
+    else if (confidence < -0.5) confClass = 'conf-med';
+
     item.innerHTML = `
         <div class="transcript-header">
             <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
+                <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}</span>
                 <div class="action-buttons">
                     ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
