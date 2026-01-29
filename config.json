@@ -93,8 +93,11 @@
         "nite": "ninth"
     },
     "settings": {
+        "device": "auto",
+        "model_size": "medium.en",
+        "compute_type": "auto",
         "no_speech_threshold": 0.6,
-        "log_prob_threshold": 0.0,
+        "log_prob_threshold": -1.0,
         "compression_ratio_threshold": 3.0,
         "beam_size": 5,
         "min_silence_duration_ms": 500,

@@ -156,12 +156,13 @@ function checkWatchwords(text) {
 }
 
 function triggerNotification(text) {
+    if (!("Notification" in window)) return;
+
     if (Notification.permission === "granted") {
         try {
             const notification = new Notification("Watchword Detected!", {
                 body: text,
-                icon: "/favicon.ico",
-                tag: 'watchword-alert', // Prevents flooding
+                tag: 'watchword-alert',
                 renotify: true
             });
 
@@ -537,21 +538,25 @@ const notificationBtn = document.getElementById('enable-notifications');
 function updateNotificationButton() {
     if (!notificationBtn) return;
 
+    if (!("Notification" in window)) {
+        notificationBtn.style.display = 'none';
+        return;
+    }
+
     if (Notification.permission === "granted") {
         notificationBtn.innerHTML = '🔔 Send Test Alert';
-        notificationBtn.classList.remove('btn-secondary');
-        notificationBtn.classList.add('btn-text'); // Subtle style
-        notificationBtn.style.opacity = '0.8';
+        notificationBtn.className = 'btn-text full-width'; // Using btn-text for a low-profile look
+        notificationBtn.style.opacity = '0.7';
         notificationBtn.title = 'Click to send a test notification to verify alerts are working.';
     } else if (Notification.permission === "denied") {
         notificationBtn.innerHTML = '⚠️ Desktop Alerts Blocked';
-        notificationBtn.style.display = 'flex';
-        notificationBtn.style.opacity = '0.6';
+        notificationBtn.className = 'btn-secondary full-width';
+        notificationBtn.style.opacity = '0.5';
         notificationBtn.style.cursor = 'not-allowed';
-        notificationBtn.title = 'Notifications are blocked in your browser settings. Click for help on how to unblock.';
+        notificationBtn.title = 'Notifications are blocked in your browser settings. Check site permissions to unblock.';
     } else {
         notificationBtn.innerHTML = '🔔 Enable Desktop Alerts';
-        notificationBtn.style.display = 'flex';
+        notificationBtn.className = 'btn-secondary full-width';
         notificationBtn.style.opacity = '1';
         notificationBtn.style.cursor = 'pointer';
     }
@@ -559,8 +564,12 @@ function updateNotificationButton() {
 
 if (notificationBtn) {
     notificationBtn.addEventListener('click', async () => {
+        if (!("Notification" in window)) {
+            alert("This browser does not support desktop notifications.");
+            return;
+        }
+
         if (Notification.permission === 'granted') {
-            // Already granted: Send test notification
             triggerNotification("This is a test notification! Alerts are working correctly.");
             return;
         }
@@ -577,11 +586,15 @@ if (notificationBtn) {
         }
 
         // Default state: Request permission
-        const permission = await Notification.requestPermission();
-        updateNotificationButton();
+        try {
+            const permission = await Notification.requestPermission();
+            updateNotificationButton();
 
-        if (permission === 'granted') {
-            triggerNotification("Notifications Enabled! You will now receive alerts for watchwords.");
+            if (permission === 'granted') {
+                triggerNotification("Notifications Enabled! You will now receive alerts for watchwords.");
+            }
+        } catch (e) {
+            console.error("Error requesting permission:", e);
         }
     });
 }

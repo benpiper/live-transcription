@@ -12,26 +12,66 @@ logging.getLogger("torch").setLevel(logging.ERROR)
 
 # Add CUDA/cuDNN paths for faster-whisper (ctranslate2) if they exist
 def setup_cuda_paths():
+    """Adds all NVIDIA library paths to LD_LIBRARY_PATH and pre-loads them to ensure they are available."""
+    import ctypes
     python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    base_paths = [
+    base_search_paths = [
         os.path.expanduser(f"~/.local/lib/{python_version}/site-packages/nvidia"),
         os.path.expanduser(f"/usr/local/lib/{python_version}/dist-packages/nvidia"),
+        "/usr/local/cuda/lib64",
     ]
     
     extra_paths = []
-    for base in base_paths:
-        if os.path.exists(base):
-            for sub in ["cudnn/lib", "cublas/lib"]:
-                full_path = os.path.join(base, sub)
-                if os.path.exists(full_path):
-                    extra_paths.append(full_path)
+    for base in base_search_paths:
+        if not os.path.exists(base):
+            continue
+        
+        for root, dirs, files in os.walk(base):
+            if 'lib' in dirs:
+                lib_path = os.path.join(root, 'lib')
+                if lib_path not in extra_paths:
+                    extra_paths.append(lib_path)
     
     if extra_paths:
+        # Update LD_LIBRARY_PATH
         current_ld = os.environ.get("LD_LIBRARY_PATH", "")
-        new_ld = ":".join(extra_paths + ([current_ld] if current_ld else []))
-        os.environ["LD_LIBRARY_PATH"] = new_ld
-        # Note: on some Linux systems, changing LD_LIBRARY_PATH inside the process 
-        # doesn't affect dlopen() calls that happen later. Users might need to export it first.
+        ld_parts = extra_paths + ([current_ld] if current_ld else [])
+        os.environ["LD_LIBRARY_PATH"] = ":".join(ld_parts)
+        
+        # Pre-load critical libraries to ensure they are in the process space
+        # This is often necessary because changing LD_LIBRARY_PATH mid-process is unreliable
+        critical_libs = [
+            "libcublas.so.12", "libcudnn.so.9", "libcudnn_ops.so.9", 
+            "libcudnn_cnn.so.9", "libcudnn_adv.so.9", "libcublasLt.so.12"
+        ]
+        
+        loaded_count = 0
+        for lib_name in critical_libs:
+            for p in extra_paths:
+                full_path = os.path.join(p, lib_name)
+                if os.path.exists(full_path):
+                    try:
+                        ctypes.CDLL(full_path, mode=ctypes.RTLD_GLOBAL)
+                        loaded_count += 1
+                        break # Move to next critical lib
+                    except Exception:
+                        pass
+        
+        if loaded_count > 0:
+            print(f"CUDA hardware acceleration: Pre-loaded {loaded_count} core libraries.")
+        else:
+            # Fallback check for v8/v11
+            fallback_libs = ["libcublas.so.11", "libcudnn.so.8"]
+            for lib_name in fallback_libs:
+                 for p in extra_paths:
+                    full_path = os.path.join(p, lib_name)
+                    if os.path.exists(full_path):
+                        try:
+                            ctypes.CDLL(full_path, mode=ctypes.RTLD_GLOBAL)
+                            loaded_count += 1
+                        except Exception: pass
+
+    return extra_paths
 
 setup_cuda_paths()
 
@@ -59,6 +99,9 @@ TRANSCRIPTION_CONFIG = {
     "vocabulary": [],
     "corrections": {},
     "settings": {
+        "device": "auto",
+        "model_size": "medium.en",
+        "compute_type": "auto",
         "no_speech_threshold": 0.8,
         "log_prob_threshold": -0.8,
         "compression_ratio_threshold": 2.4,
@@ -75,13 +118,47 @@ TRANSCRIPTION_CONFIG = {
     }
 }
 
-# Load the Faster-Whisper model
-print("Loading faster-whisper model...")
-# Using a thread-limited model to prevent CPU exhaustion
-initial_settings = TRANSCRIPTION_CONFIG["settings"]
-num_threads = initial_settings.get("cpu_threads", 4)
-model = WhisperModel("medium.en", device="cpu", compute_type="int8", cpu_threads=num_threads)
-print(f"Model loaded (Threads: {num_threads}).")
+# Placeholder for the Whisper model
+model = None
+
+def load_model():
+    """Initializes the Faster-Whisper model using config settings."""
+    global model
+    settings = TRANSCRIPTION_CONFIG["settings"]
+    
+    model_size = settings.get("model_size", "medium.en")
+    device = settings.get("device", "auto")
+    compute_type = settings.get("compute_type", "auto")
+    num_threads = settings.get("cpu_threads", 4)
+
+    # Auto-adjust compute type for CUDA if requested
+    if device == "auto" or device == "cuda":
+        # Check if CUDA is available via torch
+        try:
+            import torch
+            if torch.cuda.is_available():
+                if device == "auto": device = "cuda"
+                if compute_type == "auto": compute_type = "float16"
+                print(f"CUDA detected. Using GPU acceleration ({compute_type}).")
+            else:
+                if device == "auto": device = "cpu"
+                if compute_type == "auto": compute_type = "int8"
+                print("CUDA not available. Falling back to CPU.")
+        except ImportError:
+            if device == "auto": device = "cpu"
+            if compute_type == "auto": compute_type = "int8"
+            print("Torch not found. Defaulting to CPU.")
+    elif device == "cpu" and compute_type == "auto":
+        compute_type = "int8"
+
+    print(f"Loading faster-whisper model ({model_size}) on {device}...")
+    model = WhisperModel(
+        model_size, 
+        device=device, 
+        compute_type=compute_type, 
+        cpu_threads=num_threads
+    )
+    print(f"Model loaded (Threads: {num_threads}, Device: {device}, Type: {compute_type}).")
 
 # Speaker Identification (Optional)
 speaker_model = None
@@ -356,6 +433,13 @@ def transcribe_audio():
     while not stop_event.is_set():
         # Get new data from the queue
         try:
+            # Check for backlog and catch up if necessary
+            q_size = audio_queue.qsize()
+            if q_size > 20: # Over 10 seconds of delay
+                print(f"\r[BACKLOG] Queue is {q_size} chunks deep. Dropping oldest chunk to catch up...", end="")
+                audio_queue.get_nowait()
+                continue
+                
             timestamp, new_chunk = audio_queue.get(timeout=0.2)
         except queue.Empty:
             continue
@@ -696,10 +780,11 @@ if __name__ == "__main__":
                         TRANSCRIPTION_CONFIG[key] = loaded_config[key]
                 
                 print(f"Loaded config from {args.config}")
-                #if TRANSCRIPTION_CONFIG["vocabulary"]:
-                    #print(f"Vocabulary: {', '.join(TRANSCRIPTION_CONFIG['vocabulary'])}")
         except Exception as e:
             print(f"Error loading config: {e}")
+
+    # Load model AFTER config is parsed
+    load_model()
 
     # Start threads
     threading.Thread(target=visualizer, daemon=True).start()
