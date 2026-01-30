@@ -304,15 +304,6 @@ class ConnectionManager:
 
 ws_manager = ConnectionManager()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Start the WebSocket broadcaster task
-    broadcast_task = asyncio.create_task(websocket_broadcaster())
-    yield
-    # Shutdown: Stop task if needed (asyncio cancels tasks on exit anyway)
-
-app = FastAPI(lifespan=lifespan)
-
 # Background worker for WebSockets
 async def websocket_broadcaster():
     """Worker to broadcast data from queues to all connected WebSocket clients."""
@@ -343,6 +334,20 @@ async def websocket_broadcaster():
             print(f"Broadcaster Error: {e}")
             await asyncio.sleep(1)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start the WebSocket broadcaster task
+    broadcast_task = asyncio.create_task(websocket_broadcaster())
+    
+    # Start core threads and audio input
+    if args.web:
+        boot_app()
+        threading.Thread(target=run_input_source, daemon=True).start()
+    
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
 @app.get("/ping")
 async def ping():
     return {"status": "ok", "connections": len(ws_manager.active_connections)}
@@ -361,6 +366,8 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket Error: {e}")
         ws_manager.disconnect(websocket)
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 # Global for visualization
 current_volume = 0.0
@@ -735,32 +742,30 @@ def feed_file_to_queue(file_path):
     print("\nEnd of file reached.")
     audio_queue.put((None, None))
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Live Transcription with Faster-Whisper")
-    parser.add_argument("--input", type=str, help="Path to an audio file to test instead of microphone")
-    parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary and corrections")
-    parser.add_argument("--output", "-o", type=str, help="Path to output text file")
-    parser.add_argument("--diarize", "-d", action="store_true", help="Enable speaker identification")
-    parser.add_argument("--web", "-w", action="store_true", help="Enable web dashboard")
-    parser.add_argument("--port", type=int, default=8000, help="Web dashboard port")
-    parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit")
-    parser.add_argument("--device", type=int, help="Input device ID (from --list-devices)")
-    parser.add_argument("--debug-robo", action="store_true", help="Print robotic voice detection stats for debugging")
-    args = parser.parse_args()
+parser = argparse.ArgumentParser(description="Live Transcription with Faster-Whisper")
+parser.add_argument("--input", type=str, help="Path to an audio file to test instead of microphone")
+parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary and corrections")
+parser.add_argument("--output", "-o", type=str, help="Path to output text file")
+parser.add_argument("--diarize", "-d", action="store_true", help="Enable speaker identification")
+parser.add_argument("--web", "-w", action="store_true", help="Enable web dashboard")
+parser.add_argument("--port", type=int, default=8000, help="Web dashboard port")
+parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit")
+parser.add_argument("--device", type=int, help="Input device ID (from --list-devices)")
+parser.add_argument("--debug-robo", action="store_true", help="Print robotic voice detection stats for debugging")
+parser.add_argument("--reload", action="store_true", help="Auto-reload on code changes (Web mode only)")
+args = parser.parse_args()
 
-    if args.list_devices:
-        print("\nAvailable Audio Devices:")
-        print(sd.query_devices())
-        sys.exit(0)
-
-    if args.diarize:
+def boot_app():
+    """Centralized boot sequence for both CLI and Web modes."""
+    global transcription_thread, speaker_model
+    
+    if args.diarize and speaker_model is None:
         print("Loading speaker identification model...")
         from speechbrain.inference.speaker import EncoderClassifier
         speaker_model = EncoderClassifier.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb", 
             run_opts={"device":"cpu"}
         )
-        #print("Speaker model loaded.")
 
     if args.output:
         transcribe_audio.output_file = args.output
@@ -770,74 +775,79 @@ if __name__ == "__main__":
         try:
             with open(args.config, 'r') as f:
                 loaded_config = json.load(f)
-                # Deep merge for settings
                 if "settings" in loaded_config:
                     TRANSCRIPTION_CONFIG["settings"].update(loaded_config["settings"])
-                
-                # Simple update for others
                 for key in ["vocabulary", "corrections"]:
                     if key in loaded_config:
                         TRANSCRIPTION_CONFIG[key] = loaded_config[key]
-                
                 print(f"Loaded config from {args.config}")
         except Exception as e:
             print(f"Error loading config: {e}")
 
-    # Load model AFTER config is parsed
+    # Load Whisper model AFTER config is parsed
     load_model()
 
-    # Start threads
+    # Start core processing threads
     threading.Thread(target=visualizer, daemon=True).start()
     transcription_thread = threading.Thread(target=transcribe_audio, daemon=True)
     transcription_thread.start()
+    print("Core processing threads started.")
 
-    def run_input_source():
-        """Helper to run the selected input source (file or mic)."""
-        if args.input:
-            try:
-                feed_file_to_queue(args.input)
-                # Wait for transcription to finish flushing
+def run_input_source():
+    """Helper to run the selected input source (file or mic)."""
+    if args.input:
+        try:
+            feed_file_to_queue(args.input)
+            # Wait for transcription to finish flushing
+            # Note: transcription_thread will be global by the time this runs
+            if 'transcription_thread' in globals():
                 transcription_thread.join(timeout=30)
-                stop_event.set()
-            except Exception as e:
-                print(f"Error reading file: {e}")
-        else:
-            # Start capturing audio from the microphone
-            try:
-                device_info = sd.query_devices(args.device, 'input') if args.device is not None else sd.query_devices(kind='input')
-                print(f"Using input device: {device_info['name']}")
-                
-                with sd.InputStream(
-                    callback=audio_callback, 
-                    channels=1, 
-                    samplerate=SAMPLE_RATE, 
-                    blocksize=BUFFER_SIZE,
-                    device=args.device
-                ):
-                    print("Listening... Press Ctrl+C to stop.")
-                    while not stop_event.is_set():
-                        time.sleep(0.1)
-            except KeyboardInterrupt:
-                print("\nStopping...")
-                stop_event.set()
-            except Exception as e:
-                print(f"Microphone Error: {e}")
-                stop_event.set()
+            stop_event.set()
+        except Exception as e:
+            print(f"Error reading file: {e}")
+    else:
+        # Start capturing audio from the microphone
+        try:
+            device_info = sd.query_devices(args.device, 'input') if args.device is not None else sd.query_devices(kind='input')
+            print(f"Using input device: {device_info['name']}")
+            
+            with sd.InputStream(
+                callback=audio_callback, 
+                channels=1, 
+                samplerate=SAMPLE_RATE, 
+                blocksize=BUFFER_SIZE,
+                device=args.device
+            ):
+                print("Listening... Press Ctrl+C to stop.")
+                while not stop_event.is_set():
+                    time.sleep(0.1)
+        except KeyboardInterrupt:
+            print("\nStopping...")
+            stop_event.set()
+        except Exception as e:
+            print(f"Microphone Error: {e}")
+            stop_event.set()
 
-    if args.web:
-        # Create static directory if it doesn't exist
-        os.makedirs("static", exist_ok=True)
-        app.mount("/", StaticFiles(directory="static", html=True), name="static")
-        
-        # Start audio input in a background thread
-        threading.Thread(target=run_input_source, daemon=True).start()
-        
+if __name__ == "__main__":
+
+    if args.list_devices:
+        print("\nAvailable Audio Devices:")
+        print(sd.query_devices())
+        sys.exit(0)
+
+    if not args.web:
+        boot_app()
+        # Run input source in main thread for CLI mode
+        run_input_source()
+    else:
+        # In Web mode, boot_app and run_input_source are handled by lifespan
         print(f"\nWeb Dashboard available at http://localhost:{args.port}")
         try:
-            uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")
+            if args.reload:
+                module_name = os.path.splitext(os.path.basename(__file__))[0]
+                uvicorn.run(f"{module_name}:app", host="0.0.0.0", port=args.port, reload=True)
+            else:
+                uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")
         except KeyboardInterrupt:
             print("\nStopping Web Server...")
             stop_event.set()
-    else:
-        # Run input source in main thread
-        run_input_source()

@@ -418,15 +418,60 @@ canvas {
     font-style: italic;
 }
 
-.watchword-section {
-    padding: 0;
-}
-
 .watchword-section .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+}
+
+.speaker-filter-section {
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.tag {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tag:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+}
+
+.tag.active {
+    background: var(--primary);
+    color: #0f172a;
+    border-color: var(--primary);
+    font-weight: 600;
+}
+
+.tag .remove {
+    opacity: 0.6;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.tag .remove:hover {
+    opacity: 1;
+    color: var(--danger);
 }
 
 .tag-list {
@@ -567,6 +612,20 @@ canvas {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Speaker Filtering */
+.transcript-item {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+    transform: scale(1);
+    display: block;
+}
+
+.transcript-item.filtered-out {
+    opacity: 0;
+    transform: scale(0.95);
+    display: none !important;
 }
 
 /* Mobile Responsive Adjustments */

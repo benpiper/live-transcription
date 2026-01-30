@@ -22,6 +22,15 @@ function ensureAudioContext() {
                 sampleRate: 16000
             });
             console.log("AudioContext created at 16000Hz");
+
+            // Create AnalyserNode for spectrum
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 64; // Small size for 32 clean bars
+            const bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+
+            // Start visualization loop
+            requestAnimationFrame(drawVisualizer);
         } catch (e) {
             console.error("Failed to create AudioContext:", e);
         }
@@ -39,8 +48,13 @@ let isPlaybackMuted = false;
 let liveAudioEnabledBeforePlayback = false;
 let activePlaybackSource = null;
 let activePlaybackId = null;
+let activeSpeakerFilter = null;
 let watchwords = [];
 let theme = 'dark';
+
+// Analysis node for spectrum visualization
+let analyser;
+let dataArray;
 
 console.log("App initializing...");
 
@@ -132,13 +146,12 @@ function connect() {
 function handleAudioData(data) {
     const floatData = new Float32Array(data);
 
-    // Update visualizer peak
+    // Update peak for volume stat (legacy use)
     let peak = 0;
     for (let i = 0; i < floatData.length; i++) {
         const abs = Math.abs(floatData[i]);
         if (abs > peak) peak = abs;
     }
-    drawVisualizer(peak);
     volLevel.textContent = peak.toFixed(4);
     volStatus.textContent = peak > 0.004 ? 'Active' : 'Quiet';
 
@@ -153,8 +166,6 @@ function handleAudioData(data) {
     }
 
     if (msgCount % 20 === 0) {
-        // Latency: Show the last known processing latency
-        // Buffer: Show how many ms of audio are currently queued in the AudioContext
         if (audioCtx) {
             const bufferDepth = Math.max(0, startTime - audioCtx.currentTime);
             document.getElementById('buffer-stat').textContent = `${(bufferDepth * 1000).toFixed(0)}ms`;
@@ -168,7 +179,10 @@ function handleAudioData(data) {
 
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
+
+        // Connect to both output and analyser
         source.connect(audioCtx.destination);
+        if (analyser) source.connect(analyser);
 
         // Schedule playback to avoid gaps
         const scheduleTime = Math.max(audioCtx.currentTime, startTime);
@@ -261,8 +275,16 @@ function addTranscriptItem(data) {
         }
     }
 
-    speakers.add(data.speaker);
+    const itemSpeaker = data.speaker || 'Unknown';
+    item.dataset.speaker = itemSpeaker;
+    speakers.add(itemSpeaker);
+    renderSpeakerFilters();
     document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
+
+    // Apply active filter if necessary
+    if (activeSpeakerFilter && itemSpeaker !== activeSpeakerFilter) {
+        item.classList.add('filtered-out');
+    }
 
     // Confidence styling
     const confidence = data.confidence || 0;
@@ -289,25 +311,85 @@ function addTranscriptItem(data) {
     transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
 }
 
-function drawVisualizer(peak) {
+function drawVisualizer() {
+    if (!analyser || !ctx) return;
+
+    requestAnimationFrame(drawVisualizer);
+
     const width = canvas.width;
     const height = canvas.height;
 
+    analyser.getByteFrequencyData(dataArray);
+
     ctx.clearRect(0, 0, width, height);
 
-    const barHeight = peak * height * 5;
-    const gradient = ctx.createLinearGradient(0, height, 0, 0);
+    const barWidth = (width / dataArray.length) * 2.5;
+    let barHeight;
+    let x = 0;
 
-    // Fetch colors from CSS variables
-    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
-    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#38bdf8';
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#818cf8';
 
-    gradient.addColorStop(0, primaryColor || '#38bdf8');
-    gradient.addColorStop(1, accentColor || '#818cf8');
+    for (let i = 0; i < dataArray.length; i++) {
+        barHeight = (dataArray[i] / 255) * height;
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(10, height - barHeight, width - 20, barHeight);
+        const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
+        gradient.addColorStop(0, primaryColor);
+        gradient.addColorStop(1, accentColor);
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, height - barHeight, barWidth - 2, barHeight);
+
+        x += barWidth + 1;
+    }
 }
+
+// Speaker Filtering
+function renderSpeakerFilters() {
+    const filterContainer = document.getElementById('speaker-filters');
+    if (!filterContainer) return;
+
+    // Preserve existing tags, only add new ones
+    const currentTags = Array.from(filterContainer.querySelectorAll('.tag')).map(t => t.dataset.label);
+
+    speakers.forEach(speaker => {
+        if (!currentTags.includes(speaker)) {
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.dataset.label = speaker;
+            tag.textContent = speaker;
+            tag.onclick = () => applySpeakerFilter(speaker);
+            filterContainer.appendChild(tag);
+        }
+    });
+}
+
+function applySpeakerFilter(label) {
+    activeSpeakerFilter = label;
+
+    // Update UI highlights
+    document.querySelectorAll('#speaker-filters .tag').forEach(tag => {
+        tag.classList.toggle('active', tag.dataset.label === label);
+    });
+
+    // Filter feed
+    document.querySelectorAll('.transcript-item').forEach(item => {
+        const itemSpeaker = item.dataset.speaker || 'Unknown';
+
+        if (!label || itemSpeaker === label) {
+            item.classList.remove('filtered-out');
+        } else {
+            item.classList.add('filtered-out');
+        }
+    });
+
+    console.log(`Speaker filter applied: ${label || 'Show All'}`);
+
+    // Smooth scroll to bottom after layout change
+    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+}
+
+document.getElementById('reset-filters').addEventListener('click', () => applySpeakerFilter(null));
 
 function downloadSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
@@ -524,8 +606,10 @@ async function loadHistoryFromLocal() {
                 // Push to memory history so play/download buttons work
                 transcriptionHistory.push(item);
                 // Track speakers
-                if (item.speaker) speakers.add(item.speaker);
+                const itemSpeaker = item.speaker || 'Unknown';
+                speakers.add(itemSpeaker);
             }
+            renderSpeakerFilters();
             document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
         } catch (e) {
             console.error("Error loading history:", e);
@@ -540,6 +624,7 @@ function renderHistoryItemIndividually(data) {
     const item = document.createElement('div');
     item.className = 'transcript-item';
     item.dataset.id = data.id;
+    item.dataset.speaker = data.speaker || 'Unknown';
 
     // Check for watchwords (mostly for color)
     if (checkWatchwords(data.text)) {
