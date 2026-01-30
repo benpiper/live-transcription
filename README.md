@@ -66,6 +66,7 @@ python3 real_time_transcription.py --input test.mp3 --diarize --web --config con
 | `--port` | | Web dashboard port (default: 8000) |
 | `--list-devices` | | List available audio devices and exit |
 | `--device` | | Selected input device ID |
+| `--reload` | | Auto-reload backend on code changes (Web mode only) |
 | `--debug-robo` | | Print robotic voice detection stats for debugging |
 
 ## 🏗️ System Architecture
@@ -131,6 +132,10 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 
 | Parameter | Default | Range | Description |
 | :--- | :--- | :--- | :--- |
+| `model_size` | `medium.en` | `tiny`, `base`, `small`, `medium`, `large-v3` | The Whisper model size. Larger models are more accurate but slower and require more VRAM. |
+| `device` | `auto` | `auto`, `cuda`, `cpu` | Hardware device for execution. `cuda` requires an NVIDIA GPU and proper drivers. |
+| `compute_type` | `auto` | `float16`, `int8`, `auto` | Precision for computation. `float16` is recommended for GPU; `int8` for CPU. |
+| `cpu_threads` | `4` | `1`+ | Number of threads used for CPU processing. |
 | `no_speech_threshold` | `0.6` | `0.0` - `1.0` | **(Higher = More Strict)**. Internal VAD sensitivity. If the probability that a segment is silence is *higher* than this, it's ignored. Increase if you see "phantom" text; decrease if the model skips soft speech. |
 | `log_prob_threshold` | `-1.0` | `-inf` - `0.0` | **(Higher = More Strict)**. Whisper internal retry threshold. If tokens fall *below* this, the model retries with higher randomness. **Warning**: High values can increase latency by 5x due to re-processing attempts. |
 | `compression_ratio_threshold` | `2.4` | `1.0` - `inf` | **(Lower = More Strict)**. Detects repetitive "loops." If the ratio is *higher* than this, the segment is rejected. Lower values (e.g., `1.8`) are aggressive at killing hallucinations. |
@@ -142,6 +147,7 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `beam_size` | `5` | `1` - `20` | **(Higher = More Accurate)**. Number of parallel search paths. `5` is balanced; `10` is very accurate but doubles CPU/GPU load. |
 | `min_silence_duration_ms` | `500` | `0`+ | How long a silence gap must be to trigger the end of a sentence. |
 | `detect_bots` | `false` | `true` / `false` | When enabled, analyzes acoustic profiles to identify synthetic/robotic voices (AI dispatchers) and labels them as `[Dispatcher (Bot)]`. |
+| `diarization_threshold` | `0.35` | `0.0` - `1.0` | **(Lower = More Inclusive)**. Sensitivity for merging voice embeddings. Lowering this value (e.g., `0.28`) will merge more speakers together and reduce over-detection. |
 | `noise_floor` | `0.001` | `0.0` - `1.0` | **(Higher = More Strict)**. The minimum audio volume required to trigger a transcription. Blocks below this level skip all heavy processing to save CPU. |
 
 ## 📜 License

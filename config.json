@@ -107,6 +107,7 @@
         "min_window_sec": 1.0,
         "max_window_sec": 12.0,
         "noise_floor": 0.004,
-        "detect_bots": false
+        "detect_bots": false,
+        "diarization_threshold": 0.35
     }
 }

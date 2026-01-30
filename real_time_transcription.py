@@ -114,7 +114,8 @@ TRANSCRIPTION_CONFIG = {
         "max_window_sec": 5.0,
         "detect_bots": False,
         "cpu_threads": 4,
-        "noise_floor": 0.001
+        "noise_floor": 0.001,
+        "diarization_threshold": 0.35
     }
 }
 
@@ -229,6 +230,9 @@ class SpeakerManager:
         best_label = None
         best_idx = -1
         
+        settings = TRANSCRIPTION_CONFIG["settings"]
+        current_threshold = settings.get("diarization_threshold", self.threshold)
+        
         for i, (spk_emb, label) in enumerate(self.speakers):
             sim = cosine_similarity(embedding.unsqueeze(0), spk_emb.unsqueeze(0)).item()
             if sim > max_sim:
@@ -236,7 +240,7 @@ class SpeakerManager:
                 best_label = label
                 best_idx = i
         
-        if max_sim > self.threshold:
+        if max_sim > current_threshold:
             # Re-evaluation logic:
             # If the current label is generic ("Speaker X") AND this chunk looks robotic,
             # upgrade the label for all future instances of this speaker.
