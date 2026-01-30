@@ -259,7 +259,9 @@ function addTranscriptItem(data) {
                 speaker: data.speaker,
                 text: data.text,
                 audio: combinedAudio,
-                timestamp: data.timestamp
+                timestamp: data.timestamp,
+                origin_time: data.origin_time,
+                confidence: data.confidence
             };
 
             transcriptionHistory.push(historyItem);
@@ -584,7 +586,8 @@ function saveHistoryToLocal() {
         speaker: h.speaker,
         text: h.text,
         timestamp: h.timestamp,
-        origin_time: h.origin_time // Needed for potential future use
+        origin_time: h.origin_time,
+        confidence: h.confidence
     }));
     localStorage.setItem('transcription-history', JSON.stringify(historyToSave));
 }
@@ -631,10 +634,17 @@ function renderHistoryItemIndividually(data) {
         item.classList.add('highlight');
     }
 
+    // Confidence styling
+    const confidence = data.confidence || 0;
+    let confClass = 'conf-high';
+    if (confidence < -0.7) confClass = 'conf-low';
+    else if (confidence < -0.5) confClass = 'conf-med';
+
     item.innerHTML = `
         <div class="transcript-header">
             <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
+                <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}</span>
                 ${data.audio ? '' : '<span class="text-muted" style="font-size: 0.7rem; margin-left: 8px;">(Text Only)</span>'}
                 <div class="action-buttons">
