@@ -78,19 +78,7 @@
         "MUSC"
     ],
     "corrections": {
-        "Old Charlie": "Old Trolley",
-        "Somerville": "Summerville",
-        "EMSOX": "EMS ops",
-        "dogs challenger": "Dodge Challenger",
-        "ten four": "10-4",
-        "ten twenty": "10-20",
-        "ten thirty-three": "10-33",
-        "code three": "Code 3",
-        "code two": "Code 2",
-        "ladder one": "Ladder 1",
-        "engine one": "Engine 1",
-        "in around": "en route",
-        "nite": "ninth"
+        "EMSOX": "EMS ops"
     },
     "settings": {
         "device": "auto",
@@ -99,7 +87,7 @@
         "no_speech_threshold": 0.6,
         "log_prob_threshold": -1.0,
         "compression_ratio_threshold": 3.0,
-        "beam_size": 8,
+        "beam_size": 4,
         "min_silence_duration_ms": 500,
         "avg_logprob_cutoff": -1.1,
         "no_speech_prob_cutoff": 0.2,
@@ -108,6 +96,6 @@
         "max_window_sec": 12.0,
         "noise_floor": 0.004,
         "detect_bots": false,
-        "diarization_threshold": 0.35
+        "diarization_threshold": 0.30
     }
 }

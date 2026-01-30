@@ -849,7 +849,7 @@ if __name__ == "__main__":
         try:
             if args.reload:
                 module_name = os.path.splitext(os.path.basename(__file__))[0]
-                uvicorn.run(f"{module_name}:app", host="0.0.0.0", port=args.port, reload=True)
+                uvicorn.run(f"{module_name}:app", host="0.0.0.0", port=args.port, reload=True, reload_includes=["*.json"])
             else:
                 uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")
         except KeyboardInterrupt:
