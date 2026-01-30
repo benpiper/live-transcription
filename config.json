@@ -87,16 +87,16 @@
         "no_speech_threshold": 0.6,
         "log_prob_threshold": -1.0,
         "compression_ratio_threshold": 3.0,
-        "beam_size": 4,
+        "beam_size": 7,
         "min_silence_duration_ms": 500,
         "avg_logprob_cutoff": -1.1,
         "no_speech_prob_cutoff": 0.2,
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
-        "max_window_sec": 12.0,
-        "noise_floor": 0.004,
-        "detect_bots": false,
-        "diarization_threshold": 0.30,
-        "min_speaker_samples": 16000
+        "max_window_sec": 8.0,
+        "noise_floor": 0.003,
+        "detect_bots": true,
+        "diarization_threshold": 0.40,
+        "min_speaker_samples": 32000
     }
 }
