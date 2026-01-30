@@ -1,0 +1,164 @@
+"""
+Web server and WebSocket handling for the live transcription dashboard.
+
+This module provides the FastAPI application, WebSocket endpoints,
+and the broadcaster worker for real-time updates.
+"""
+
+import asyncio
+import logging
+import queue
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger(__name__)
+
+
+class ConnectionManager:
+    """Manages active WebSocket connections for broadcasting."""
+    
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        """Accept and register a new WebSocket connection."""
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"Client connected. Active: {len(self.active_connections)}")
+        print(f"Client connected. Active: {len(self.active_connections)}")
+    
+    def disconnect(self, websocket: WebSocket):
+        """Remove a WebSocket connection from the active list."""
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info("Client disconnected.")
+            print("Client disconnected.")
+    
+    async def broadcast_json(self, data: dict):
+        """Send JSON data to all connected clients."""
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json(data)
+            except Exception as e:
+                logger.debug(f"Failed to send to client: {e}")
+                self.disconnect(connection)
+    
+    async def broadcast_bytes(self, data: bytes):
+        """Send binary data to all connected clients."""
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_bytes(data)
+            except Exception as e:
+                logger.debug(f"Failed to send bytes to client: {e}")
+                self.disconnect(connection)
+
+
+# Global connection manager instance
+ws_manager = ConnectionManager()
+
+# Queues for inter-thread communication (set by main module)
+broadcast_queue: queue.Queue = None
+audio_broadcast_queue: queue.Queue = None
+
+
+def set_queues(json_queue: queue.Queue, audio_queue: queue.Queue):
+    """Set the broadcast queues from the main module."""
+    global broadcast_queue, audio_broadcast_queue
+    broadcast_queue = json_queue
+    audio_broadcast_queue = audio_queue
+
+
+async def websocket_broadcaster():
+    """
+    Background worker to broadcast data from queues to WebSocket clients.
+    
+    Continuously drains the broadcast queues and sends updates to all
+    connected clients.
+    """
+    logger.info("WebSocket Broadcaster started.")
+    print("WebSocket Broadcaster started.")
+    
+    while True:
+        try:
+            # Broadcast JSON transcripts
+            if broadcast_queue is not None:
+                while not broadcast_queue.empty():
+                    try:
+                        data = broadcast_queue.get_nowait()
+                        await ws_manager.broadcast_json(data)
+                    except queue.Empty:
+                        break
+            
+            # Broadcast raw audio
+            if audio_broadcast_queue is not None:
+                while not audio_broadcast_queue.empty():
+                    try:
+                        audio_data = audio_broadcast_queue.get_nowait()
+                        await ws_manager.broadcast_bytes(audio_data)
+                    except queue.Empty:
+                        break
+            
+            await asyncio.sleep(0.02)  # 50 updates/sec max
+            
+        except Exception as e:
+            logger.error(f"Broadcaster error: {e}")
+            await asyncio.sleep(1)
+
+
+def create_app(boot_callback=None, input_callback=None) -> FastAPI:
+    """
+    Create and configure the FastAPI application.
+    
+    Args:
+        boot_callback: Optional function to call on startup (loads models, etc.)
+        input_callback: Optional function to start audio input
+        
+    Returns:
+        Configured FastAPI application
+    """
+    
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Manage application lifecycle."""
+        # Startup
+        broadcast_task = asyncio.create_task(websocket_broadcaster())
+        
+        if boot_callback:
+            boot_callback()
+        if input_callback:
+            import threading
+            threading.Thread(target=input_callback, daemon=True).start()
+        
+        yield
+        
+        # Shutdown (task cancelled automatically)
+    
+    app = FastAPI(lifespan=lifespan)
+    
+    @app.get("/ping")
+    async def ping():
+        """Health check endpoint."""
+        return {
+            "status": "ok", 
+            "connections": len(ws_manager.active_connections)
+        }
+    
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        """WebSocket endpoint for real-time updates."""
+        logger.info("New WebSocket client connecting...")
+        print("New WebSocket client connecting...")
+        await ws_manager.connect(websocket)
+        try:
+            while True:
+                # Keep connection alive (client doesn't send data)
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            ws_manager.disconnect(websocket)
+    
+    # Mount static files last (catch-all)
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
+    
+    return app
