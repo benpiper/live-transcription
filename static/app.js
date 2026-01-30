@@ -15,6 +15,23 @@ let startTime = 0;
 let speakers = new Set();
 let msgCount = 0;
 
+function ensureAudioContext() {
+    if (!audioCtx) {
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 16000
+            });
+            console.log("AudioContext created at 16000Hz");
+        } catch (e) {
+            console.error("Failed to create AudioContext:", e);
+        }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
+}
+
 // On-demand playback state
 let rawAudioHistory = []; // {timestamp: float, chunk: Float32Array}
 let transcriptionHistory = []; // {id: string, text: string, speaker: string, audio: Float32Array}
@@ -27,23 +44,34 @@ let theme = 'dark';
 
 console.log("App initializing...");
 
+// IndexedDB Setup for persistent audio
+let db;
+const dbRequest = indexedDB.open("TranscriptionDB", 2);
+
+dbRequest.onupgradeneeded = (event) => {
+    const db = event.target.result;
+    if (!db.objectStoreNames.contains("audioStore")) {
+        db.createObjectStore("audioStore");
+    }
+};
+
+dbRequest.onsuccess = (event) => {
+    db = event.target.result;
+    console.log("IndexedDB initialized");
+    // Load history after DB is ready
+    loadHistoryFromLocal();
+};
+
+dbRequest.onerror = (event) => {
+    console.error("IndexedDB error:", event.target.error);
+    // Fallback: Load text-only history if DB fails
+    loadHistoryFromLocal();
+};
+
 // Initialize Audio Context on user gesture
 audioToggle.addEventListener('click', () => {
     console.log("Audio toggle clicked");
-    if (!audioCtx) {
-        try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 16000
-            });
-            console.log("AudioContext created at 16000Hz");
-        } catch (e) {
-            console.error("Failed to create AudioContext:", e);
-        }
-    }
-
-    if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    ensureAudioContext();
 
     isAudioEnabled = !isAudioEnabled;
     audioToggle.classList.toggle('active', isAudioEnabled);
@@ -225,6 +253,7 @@ function addTranscriptItem(data) {
             // Add ID for playback lookup
             item.dataset.id = itemId;
 
+            saveAudioToDB(itemId, combinedAudio);
             saveHistoryToLocal();
             pruneHistory();
         } else {
@@ -238,7 +267,7 @@ function addTranscriptItem(data) {
     // Confidence styling
     const confidence = data.confidence || 0;
     let confClass = 'conf-high';
-    if (confidence < -1.0) confClass = 'conf-low';
+    if (confidence < -0.7) confClass = 'conf-low';
     else if (confidence < -0.5) confClass = 'conf-med';
 
     item.innerHTML = `
@@ -347,19 +376,35 @@ function writeString(view, offset, string) {
 
 function playSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
-    if (!item || !audioCtx) return;
+    if (!item || !item.audio) {
+        console.warn("No audio data for segment:", id);
+        return;
+    }
+
+    // Ensure audio context is ready
+    const context = ensureAudioContext();
+    if (!context) return;
 
     // 1. If we are clicking the SAME button that is already playing, STOP it.
     if (activePlaybackId === id) {
         if (activePlaybackSource) {
-            activePlaybackSource.stop();
+            try { activePlaybackSource.stop(); } catch (e) { }
         }
         return; // The onended handler below will clean up UI and state
     }
 
     // 2. If something else is playing, stop it first
     if (activePlaybackSource) {
-        try { activePlaybackSource.stop(); } catch (e) { }
+        try {
+            // Manually reset the UI for the previously playing clip
+            const prevId = activePlaybackId;
+            const prevBtn = document.querySelector(`[data-id="${prevId}"] .play-btn`);
+            if (prevBtn) {
+                prevBtn.innerHTML = '▶️';
+                prevBtn.classList.remove('playing');
+            }
+            activePlaybackSource.stop();
+        } catch (e) { }
     }
 
     console.log("Playing back segment:", id);
@@ -376,12 +421,12 @@ function playSegment(id) {
         btn.classList.add('playing');
     }
 
-    const buffer = audioCtx.createBuffer(1, item.audio.length, 16000);
+    const buffer = context.createBuffer(1, item.audio.length, 16000);
     buffer.getChannelData(0).set(item.audio);
 
-    const source = audioCtx.createBufferSource();
+    const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(audioCtx.destination);
+    source.connect(context.destination);
 
     activePlaybackSource = source;
     activePlaybackId = id;
@@ -403,8 +448,34 @@ function playSegment(id) {
     source.start(0);
 }
 
+function saveAudioToDB(id, audioData) {
+    if (!db) return;
+    const transaction = db.transaction(["audioStore"], "readwrite");
+    const store = transaction.objectStore("audioStore");
+    store.put(audioData, id);
+}
+
+function getAudioFromDB(id) {
+    return new Promise((resolve) => {
+        if (!db) return resolve(null);
+        const transaction = db.transaction(["audioStore"], "readonly");
+        const store = transaction.objectStore("audioStore");
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+    });
+}
+
+function deleteAudioFromDB(id) {
+    if (!db) return;
+    const transaction = db.transaction(["audioStore"], "readwrite");
+    const store = transaction.objectStore("audioStore");
+    store.delete(id);
+}
+
 function pruneHistory() {
     const limitInput = document.getElementById('history-limit');
+    if (!limitInput) return;
     const limit = parseInt(limitInput.value) || 10;
 
     // Save to localStorage
@@ -412,36 +483,50 @@ function pruneHistory() {
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
-        // UI Clean up: Remove action buttons from the DOM for this segment
+        // Delete audio from IndexedDB
+        deleteAudioFromDB(removed.id);
+
+        // UI Clean up
         const segmentEl = document.querySelector(`[data-id="${removed.id}"]`);
         if (segmentEl) {
-            const actionBtns = segmentEl.querySelector('.action-buttons');
-            if (actionBtns) actionBtns.remove();
+            segmentEl.remove();
         }
     }
     saveHistoryToLocal();
 }
 
 function saveHistoryToLocal() {
-    // Only save the text/metadata, audio is too large for localStorage
+    // Only save the text/metadata, audio is in IndexedDB
     const historyToSave = transcriptionHistory.map(h => ({
         id: h.id,
         speaker: h.speaker,
         text: h.text,
-        timestamp: h.timestamp
+        timestamp: h.timestamp,
+        origin_time: h.origin_time // Needed for potential future use
     }));
     localStorage.setItem('transcription-history', JSON.stringify(historyToSave));
 }
 
-function loadHistoryFromLocal() {
+async function loadHistoryFromLocal() {
     const saved = localStorage.getItem('transcription-history');
     if (saved) {
         try {
             const items = JSON.parse(saved);
-            items.forEach(item => {
-                // Add to feed but without audio capability (since we can't save audio)
+            for (const item of items) {
+                // Try to restore audio from DB
+                const audio = await getAudioFromDB(item.id);
+                if (audio) {
+                    item.audio = audio;
+                }
+
+                // Add to feed
                 renderHistoryItemIndividually(item);
-            });
+                // Push to memory history so play/download buttons work
+                transcriptionHistory.push(item);
+                // Track speakers
+                if (item.speaker) speakers.add(item.speaker);
+            }
+            document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
         } catch (e) {
             console.error("Error loading history:", e);
         }
@@ -454,6 +539,7 @@ function renderHistoryItemIndividually(data) {
 
     const item = document.createElement('div');
     item.className = 'transcript-item';
+    item.dataset.id = data.id;
 
     // Check for watchwords (mostly for color)
     if (checkWatchwords(data.text)) {
@@ -465,13 +551,20 @@ function renderHistoryItemIndividually(data) {
             <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="timestamp">${data.timestamp}</span>
-                <span class="text-muted" style="font-size: 0.7rem; margin-left: 8px;">(Archive)</span>
+                ${data.audio ? '' : '<span class="text-muted" style="font-size: 0.7rem; margin-left: 8px;">(Text Only)</span>'}
+                <div class="action-buttons">
+                    ${data.audio ? `
+                        <button class="play-btn" onclick="playSegment('${data.id}')" title="Play audio">▶️</button>
+                        <button class="download-btn" onclick="downloadSegment('${data.id}')" title="Download clip">📥</button>
+                    ` : ''}
+                </div>
             </div>
         </div>
         <div class="transcript-text">${data.text}</div>
     `;
 
     transcriptFeed.appendChild(item);
+    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
 }
 
 // Initial setup for history limit
@@ -639,7 +732,32 @@ document.querySelector('.feed-section').addEventListener('click', () => {
     }
 });
 
-// Initialization
+// History Clearing
+function clearFullHistory() {
+    if (!confirm("Are you sure you want to clear ALL transcription history and audio clips?")) return;
+
+    // Clear variables
+    transcriptionHistory = [];
+    speakers.clear();
+    document.getElementById('speaker-count').textContent = '0 Speakers Detected';
+
+    // Clear UI
+    transcriptFeed.innerHTML = '<div class="placeholder">Waiting for incoming audio...</div>';
+
+    // Clear LocalStorage
+    localStorage.removeItem('transcription-history');
+
+    // Clear IndexedDB
+    if (db) {
+        const transaction = db.transaction(["audioStore"], "readwrite");
+        const store = transaction.objectStore("audioStore");
+        store.clear();
+    }
+}
+
+document.getElementById('clear-history').addEventListener('click', clearFullHistory);
+
+// Initialization (Remove old call, moved to DB success)
 const savedTheme = localStorage.getItem('theme') || 'dark';
 setTheme(savedTheme);
 
@@ -649,7 +767,6 @@ if (savedWatchwords) {
     renderWatchwords();
 }
 
-loadHistoryFromLocal();
 updateNotificationButton();
 
 connect();

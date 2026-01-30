@@ -121,6 +121,8 @@ main {
     display: grid;
     grid-template-columns: 1fr 320px;
     overflow: hidden;
+    min-height: 0;
+    /* Critical for enabling children overflow in flex/grid */
 }
 
 .feed-section {
@@ -247,6 +249,7 @@ main {
     color: #10b981;
     animation: pulse 1s infinite;
 }
+
 /* Confidence Indicators */
 .confidence {
     font-family: var(--font-mono);
@@ -259,17 +262,20 @@ main {
 }
 
 .conf-high {
-    color: #4ade80; /* Green */
+    color: #4ade80;
+    /* Green */
     border-color: rgba(74, 222, 128, 0.2);
 }
 
 .conf-med {
-    color: #fbbf24; /* Amber */
+    color: #fbbf24;
+    /* Amber */
     border-color: rgba(251, 191, 36, 0.2);
 }
 
 .conf-low {
-    color: #f87171; /* Red */
+    color: #f87171;
+    /* Red */
     border-color: rgba(248, 113, 113, 0.2);
 }
 
@@ -305,11 +311,32 @@ main {
 }
 
 .sidebar {
-    padding: 32px;
+    padding: 24px;
     background: var(--glass);
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 24px;
+    overflow-y: auto;
+    height: 100%;
+    min-height: 0;
+    /* Critical for enabling overflow scrolling in flex/grid items */
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
 }
 
 canvas {

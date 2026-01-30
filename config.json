@@ -94,18 +94,18 @@
     },
     "settings": {
         "device": "auto",
-        "model_size": "medium.en",
+        "model_size": "large-v3",
         "compute_type": "auto",
         "no_speech_threshold": 0.6,
         "log_prob_threshold": -1.0,
         "compression_ratio_threshold": 3.0,
-        "beam_size": 5,
+        "beam_size": 10,
         "min_silence_duration_ms": 500,
         "avg_logprob_cutoff": -1.1,
         "no_speech_prob_cutoff": 0.2,
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
-        "max_window_sec": 5.0,
+        "max_window_sec": 12.0,
         "noise_floor": 0.004,
         "detect_bots": false
     }
