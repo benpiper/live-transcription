@@ -78,12 +78,28 @@ def audio_callback(indata, frames, time_info, status):
     # Add to transcription queue
     audio_queue.put((timestamp, audio_data))
     
-    # Broadcast raw audio to web clients
-    audio_bytes = audio_data.astype(np.float32).tobytes()
+    # Noise-gated audio broadcast to web clients
     try:
-        audio_broadcast_queue.put_nowait(audio_bytes)
+        noise_floor = get_setting("noise_floor", 0.001)
+        now = time.time()
+        last_broadcast = getattr(audio_callback, "last_vol_broadcast", 0)
+        
+        if current_volume >= noise_floor:
+            # Broadcast raw audio when above noise floor
+            audio_broadcast_queue.put_nowait(audio_data.astype(np.float32).tobytes())
+            audio_callback.last_vol_broadcast = now
+        elif now - last_broadcast > 2.0:
+            # Send a small JSON volume update during silence (every 2s)
+            broadcast_queue.put({
+                "type": "volume",
+                "peak": float(current_volume)
+            })
+            audio_callback.last_vol_broadcast = now
     except queue.Full:
         pass
+    except Exception as e:
+        logger.debug(f"Audio broadcast error: {e}")
+
 
 
 def visualizer():
@@ -91,15 +107,18 @@ def visualizer():
     global current_volume
     
     while not stop_event.is_set():
-        vol = min(current_volume * 500, 1.0)
-        bar_len = int(vol * 50)
-        meter = "[" + "#" * bar_len + "-" * (50 - bar_len) + "]"
+        # Create a simple ASCII bar
+        bars = int(current_volume * 300)  # multiplier for visibility
+        bars = min(bars, 50)
+        meter = "[" + "#" * bars + "-" * (50 - bars) + "]"
         
-        status = "Quiet " if vol < 0.1 else "Active"
+        # Determine status
+        status = "Active" if current_volume > 0.002 else "Quiet "
         
         sys.stdout.write(f"\r{meter} {status} (vol: {current_volume:.4f})")
         sys.stdout.flush()
         time.sleep(0.05)
+
 
 
 def transcribe_audio_loop():

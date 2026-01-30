@@ -96,6 +96,7 @@
         "max_window_sec": 12.0,
         "noise_floor": 0.004,
         "detect_bots": false,
-        "diarization_threshold": 0.30
+        "diarization_threshold": 0.30,
+        "min_speaker_samples": 16000
     }
 }

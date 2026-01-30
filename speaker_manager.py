@@ -15,8 +15,14 @@ from config import TRANSCRIPTION_CONFIG
 
 logger = logging.getLogger(__name__)
 
-# Minimum samples required for speaker identification (0.5s at 16kHz)
-MIN_SPEAKER_ID_SAMPLES = 8000
+# Default minimum samples for speaker identification (1s at 16kHz)
+# This can be overridden via config.json settings.min_speaker_samples
+MIN_SPEAKER_ID_SAMPLES = 16000
+
+
+def get_min_speaker_samples() -> int:
+    """Get minimum samples for speaker ID from config."""
+    return TRANSCRIPTION_CONFIG["settings"].get("min_speaker_samples", MIN_SPEAKER_ID_SAMPLES)
 
 
 class SpeakerManager:

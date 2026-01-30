@@ -27,37 +27,69 @@ SAMPLE_RATE = 16000
 
 def setup_cuda_paths():
     """
-    Add NVIDIA library paths to LD_LIBRARY_PATH for ctranslate2.
-    
-    This ensures CUDA/cuDNN libraries are found at runtime.
+    Adds all NVIDIA library paths to LD_LIBRARY_PATH and pre-loads them 
+    to ensure they are available for faster-whisper/ctranslate2.
     """
-    cuda_paths = [
+    import ctypes
+    python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    base_search_paths = [
+        os.path.expanduser(f"~/.local/lib/{python_version}/site-packages/nvidia"),
+        os.path.expanduser(f"/usr/local/lib/{python_version}/dist-packages/nvidia"),
         "/usr/local/cuda/lib64",
-        "/usr/local/cuda-11/lib64",
-        "/usr/local/cuda-12/lib64",
-        "/opt/cuda/lib64",
-        os.path.expanduser("~/.local/lib"),
     ]
     
-    # Find existing CUDA libs
-    cuda_libs = [
-        "libcudnn.so", "libcublas.so", "libcublasLt.so", 
-        "libcudart.so", "libcurand.so", "libcufft.so"
-    ]
+    extra_paths = []
+    for base in base_search_paths:
+        if not os.path.exists(base):
+            continue
+        
+        for root, dirs, files in os.walk(base):
+            if 'lib' in dirs:
+                lib_path = os.path.join(root, 'lib')
+                if lib_path not in extra_paths:
+                    extra_paths.append(lib_path)
     
-    for path in cuda_paths:
-        if os.path.isdir(path):
-            for lib in cuda_libs:
-                lib_path = os.path.join(path, lib)
-                if os.path.exists(lib_path) or any(
-                    f.startswith(lib.replace(".so", "")) 
-                    for f in os.listdir(path) if ".so" in f
-                ):
-                    current = os.environ.get("LD_LIBRARY_PATH", "")
-                    if path not in current:
-                        os.environ["LD_LIBRARY_PATH"] = f"{path}:{current}"
-                        logger.debug(f"Added {path} to LD_LIBRARY_PATH")
-                    break
+    if extra_paths:
+        # Update LD_LIBRARY_PATH
+        current_ld = os.environ.get("LD_LIBRARY_PATH", "")
+        ld_parts = extra_paths + ([current_ld] if current_ld else [])
+        os.environ["LD_LIBRARY_PATH"] = ":".join(ld_parts)
+        
+        # Pre-load critical libraries to ensure they are in the process space
+        # This is often necessary because changing LD_LIBRARY_PATH mid-process is unreliable
+        critical_libs = [
+            "libcublas.so.12", "libcudnn.so.9", "libcudnn_ops.so.9", 
+            "libcudnn_cnn.so.9", "libcudnn_adv.so.9", "libcublasLt.so.12"
+        ]
+        
+        loaded_count = 0
+        for lib_name in critical_libs:
+            for p in extra_paths:
+                full_path = os.path.join(p, lib_name)
+                if os.path.exists(full_path):
+                    try:
+                        ctypes.CDLL(full_path, mode=ctypes.RTLD_GLOBAL)
+                        loaded_count += 1
+                        break  # Move to next critical lib
+                    except Exception:
+                        pass
+        
+        if loaded_count > 0:
+            print(f"CUDA hardware acceleration: Pre-loaded {loaded_count} core libraries.")
+        else:
+            # Fallback check for v8/v11
+            fallback_libs = ["libcublas.so.11", "libcudnn.so.8"]
+            for lib_name in fallback_libs:
+                for p in extra_paths:
+                    full_path = os.path.join(p, lib_name)
+                    if os.path.exists(full_path):
+                        try:
+                            ctypes.CDLL(full_path, mode=ctypes.RTLD_GLOBAL)
+                            loaded_count += 1
+                        except Exception:
+                            pass
+
+    return extra_paths
 
 
 def load_model():
@@ -223,7 +255,7 @@ def transcribe_chunk(
             end_sample = int(segment.end * SAMPLE_RATE)
             audio_slice = audio_flat[start_sample:end_sample]
             
-            if len(audio_slice) >= 8000:  # Min 0.5s for speaker ID
+            if len(audio_slice) >= settings.get("min_speaker_samples", 16000):
                 try:
                     signal = torch.from_numpy(audio_slice).unsqueeze(0)
                     embeddings = speaker_model.encode_batch(signal)

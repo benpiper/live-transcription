@@ -31,7 +31,8 @@ DEFAULT_CONFIG = {
         "detect_bots": False,
         "cpu_threads": 4,
         "noise_floor": 0.001,
-        "diarization_threshold": 0.35
+        "diarization_threshold": 0.35,
+        "min_speaker_samples": 16000
     }
 }
 
