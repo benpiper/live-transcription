@@ -158,6 +158,54 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
         except WebSocketDisconnect:
             ws_manager.disconnect(websocket)
     
+    # Session API endpoints
+    @app.get("/api/sessions")
+    async def list_sessions_endpoint():
+        """List all saved sessions."""
+        from session import list_sessions
+        return {"sessions": list_sessions()}
+    
+    @app.post("/api/sessions")
+    async def create_session_endpoint(name: str = None):
+        """Create a new session."""
+        from session import init_session, save_session
+        session = init_session(session_name=name)
+        save_session(session)
+        return {"name": session.name, "created_at": session.created_at}
+    
+    @app.get("/api/sessions/{name}")
+    async def get_session_endpoint(name: str):
+        """Get a session's transcripts."""
+        from session import load_session_from_file
+        try:
+            session = load_session_from_file(name)
+            return session.to_dict()
+        except FileNotFoundError:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail=f"Session not found: {name}")
+    
+    @app.post("/api/sessions/{name}/save")
+    async def save_session_endpoint(name: str):
+        """Save the current session."""
+        from session import get_session, save_session
+        session = get_session()
+        if not session:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="No active session")
+        path = save_session(session, name)
+        return {"saved": True, "path": path}
+    
+    @app.delete("/api/sessions/{name}")
+    async def delete_session_endpoint(name: str):
+        """Delete a saved session."""
+        from session import delete_session
+        deleted = delete_session(name)
+        if deleted:
+            return {"deleted": True}
+        else:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail=f"Session not found: {name}")
+    
     # Mount static files last (catch-all)
     app.mount("/", StaticFiles(directory="static", html=True), name="static")
     

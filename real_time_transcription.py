@@ -257,6 +257,21 @@ def output_transcription(merged_segments, start_time, audio_flat):
                     f.flush()
             except Exception as e:
                 logger.error(f"Error writing to output file: {e}")
+        
+        # Add to session for persistence
+        try:
+            from session import get_session
+            session = get_session()
+            if session:
+                session.add_transcript({
+                    "timestamp": display_time,
+                    "origin_time": start_time.timestamp() + m["start"],
+                    "speaker": m["speaker"],
+                    "text": m["text"],
+                    "confidence": conf_val
+                })
+        except Exception as e:
+            logger.debug(f"Session tracking failed: {e}")
 
 
 def feed_file_to_queue(file_path: str):
@@ -312,9 +327,19 @@ def boot_app():
     """Initialize the application (model loading, speaker model, etc.)."""
     global speaker_model
     
-    # Initialize session with config (validates config at startup)
-    from session import init_session
-    session = init_session(args.config)
+    # Initialize or load session
+    from session import init_session, load_session_from_file
+    
+    session_name = getattr(args, 'session', None)
+    if session_name:
+        try:
+            session = load_session_from_file(session_name, args.config)
+            print(f"📂 Loaded session: {session_name} ({len(session.transcripts)} transcripts)")
+        except FileNotFoundError:
+            session = init_session(args.config, session_name)
+            print(f"📁 Created new session: {session_name}")
+    else:
+        session = init_session(args.config)
     
     # Log any config validation warnings
     if session.get_config_errors():
@@ -343,6 +368,23 @@ def boot_app():
     transcription_thread = threading.Thread(target=transcribe_audio_loop, daemon=True)
     transcription_thread.start()
     print("Core processing threads started.")
+    
+    # Auto-save session every 60 seconds if --session flag is used
+    if session_name:
+        def autosave_loop():
+            from session import save_session, get_session
+            while not stop_event.is_set():
+                time.sleep(60)
+                try:
+                    s = get_session()
+                    if s and len(s.transcripts) > 0:
+                        save_session(s)
+                        logger.info(f"Session auto-saved: {s.name} ({len(s.transcripts)} transcripts)")
+                except Exception as e:
+                    logger.warning(f"Auto-save failed: {e}")
+        
+        threading.Thread(target=autosave_loop, daemon=True).start()
+        print(f"📁 Session will auto-save every 60 seconds.")
 
 
 def run_input_source():
@@ -387,6 +429,8 @@ parser.add_argument("--list-devices", action="store_true", help="List available 
 parser.add_argument("--device", type=int, help="Input device ID")
 parser.add_argument("--debug-robo", action="store_true", help="Print robotic voice detection stats")
 parser.add_argument("--reload", action="store_true", help="Auto-reload on code changes (Web mode only)")
+parser.add_argument("--session", "-s", type=str, help="Load or create a named session")
+parser.add_argument("--list-sessions", action="store_true", help="List all saved sessions and exit")
 args = parser.parse_args()
 
 # Set broadcast queues for web server (needed at module level for reload)
@@ -403,6 +447,23 @@ if __name__ == "__main__":
         print(sd.query_devices())
         sys.exit(0)
     
+    # Handle session listing
+    if args.list_sessions:
+        from session import list_sessions
+        sessions = list_sessions()
+        if sessions:
+            print("\n📁 Saved Sessions:")
+            print("-" * 60)
+            for s in sessions:
+                print(f"  {s['name']}")
+                print(f"      Created: {s['created_at'][:19] if s.get('created_at') else 'Unknown'}")
+                print(f"      Transcripts: {s['transcript_count']}")
+                print()
+        else:
+            print("\nNo saved sessions found.")
+            print("Use --session 'Name' to create a new session.")
+        sys.exit(0)
+    
     if args.web:
         import uvicorn
         
@@ -416,7 +477,8 @@ if __name__ == "__main__":
                     host="0.0.0.0",
                     port=args.port,
                     reload=True,
-                    reload_includes=["*.json"]
+                    reload_includes=["*.json"],
+                    reload_excludes=["sessions/*"]
                 )
             else:
                 uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")

@@ -64,10 +64,38 @@ python3 real_time_transcription.py --input test.mp3 --diarize --web --config con
 | `--diarize` | `-d` | Enable real-time speaker identification |
 | `--web` | `-w` | Enable the web dashboard |
 | `--port` | | Web dashboard port (default: 8000) |
+| `--session` | `-s` | Load or create a named session for transcript storage |
+| `--list-sessions` | | List all saved sessions and exit |
 | `--list-devices` | | List available audio devices and exit |
 | `--device` | | Selected input device ID |
 | `--reload` | | Auto-reload backend on code changes (Web mode only) |
 | `--debug-robo` | | Print robotic voice detection stats for debugging |
+
+## 📁 Sessions
+
+Sessions allow you to save and resume transcription work by name.
+
+### Create or Load a Session
+```bash
+python3 real_time_transcription.py --session "Morning Shift" --web --config config.json
+```
+
+### List Saved Sessions
+```bash
+python3 real_time_transcription.py --list-sessions
+```
+
+### REST API Endpoints
+| Method | Endpoint | Description |
+| :---: | :--- | :--- |
+| GET | `/api/sessions` | List all saved sessions |
+| POST | `/api/sessions?name=Name` | Create new session |
+| GET | `/api/sessions/{name}` | Get session transcripts |
+| POST | `/api/sessions/{name}/save` | Save current session |
+| DELETE | `/api/sessions/{name}` | Delete session |
+
+Sessions are stored as JSON files in the `sessions/` directory.
+
 
 ## 🏗️ System Architecture
 

@@ -11,3 +11,4 @@ env/
 *.mp3
 *.wav
 *.txt
+sessions/
