@@ -248,13 +248,14 @@ def transcribe_chunk(
         elif segment.no_speech_prob > no_speech_prob_cutoff:
             continue
         
-        # Speaker identification
-        seg_speaker_label = "Unknown"
+        # Speaker identification and/or robot detection
+        seg_speaker_label = "Speaker"  # Default label
+        start_sample = int(segment.start * SAMPLE_RATE)
+        end_sample = int(segment.end * SAMPLE_RATE)
+        audio_slice = audio_flat[start_sample:end_sample]
+        
+        # Full diarization path (with speaker embeddings)
         if speaker_model and speaker_manager and not skip_diarization:
-            start_sample = int(segment.start * SAMPLE_RATE)
-            end_sample = int(segment.end * SAMPLE_RATE)
-            audio_slice = audio_flat[start_sample:end_sample]
-            
             if len(audio_slice) >= settings.get("min_speaker_samples", 16000):
                 try:
                     signal = torch.from_numpy(audio_slice).unsqueeze(0)
@@ -263,8 +264,16 @@ def transcribe_chunk(
                     seg_speaker_label = speaker_manager.identify_speaker(emb, audio_slice)
                 except Exception as e:
                     logger.debug(f"Speaker identification failed: {e}")
-        elif skip_diarization:
-            seg_speaker_label = "Unknown Speaker"
+        
+        # Standalone robot detection (works without --diarize)
+        elif settings.get("detect_bots", False) and speaker_manager:
+            if len(audio_slice) >= 8000:  # Min 0.5s for robot detection
+                try:
+                    is_robo, *_ = speaker_manager.is_robotic_voice(audio_slice)
+                    if is_robo:
+                        seg_speaker_label = "Dispatcher (Bot)"
+                except Exception as e:
+                    logger.debug(f"Robot detection failed: {e}")
         
         # Apply corrections
         text = text_segment

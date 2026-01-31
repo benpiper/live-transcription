@@ -94,8 +94,11 @@
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
         "max_window_sec": 8.0,
-        "noise_floor": 0.003,
-        "detect_bots": true,
+        "noise_floor": 0.02,
+        "detect_bots": false,
+        "debug_robo": true,
+        "robot_pitch_std_threshold": 6.0,
+        "robot_flatness_threshold": 0.016,
         "diarization_threshold": 0.40,
         "min_speaker_samples": 32000
     }

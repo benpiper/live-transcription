@@ -146,8 +146,12 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `max_window_sec` | `10.0` | `min_window_sec`+ | **(Lower = Faster Updates)**. Force transcription if no pause is found. Lowering to `5.0` provides faster UI updates but may cut off speakers mid-sentence. |
 | `beam_size` | `5` | `1` - `20` | **(Higher = More Accurate)**. Number of parallel search paths. `5` is balanced; `10` is very accurate but doubles CPU/GPU load. |
 | `min_silence_duration_ms` | `500` | `0`+ | How long a silence gap must be to trigger the end of a sentence. |
-| `detect_bots` | `false` | `true` / `false` | When enabled, analyzes acoustic profiles to identify synthetic/robotic voices (AI dispatchers) and labels them as `[Dispatcher (Bot)]`. |
+| `detect_bots` | `false` | `true` / `false` | When enabled, analyzes pitch and spectral features to identify synthetic/TTS voices and labels them as `[Dispatcher (Bot)]`. Works with or without `--diarize`. |
+| `debug_robo` | `false` | `true` / `false` | Prints real-time robot detection debug output showing pitch_std and flatness values for tuning. |
+| `robot_pitch_std_threshold` | `8.0` | `0.0`+ | **(Lower = More Strict)**. Flags voices with pitch standard deviation below this as monotone/robotic. Human speech typically varies 20-100+ Hz. |
+| `robot_flatness_threshold` | `0.012` | `0.0` - `1.0` | **(Higher = More Strict)**. Flags unnaturally "clean" audio (low spectral flatness) as synthetic. TTS voices often have flatness < 0.01 due to lack of breath noise. |
 | `diarization_threshold` | `0.35` | `0.0` - `1.0` | **(Lower = More Inclusive)**. Sensitivity for merging voice embeddings. Lowering this value (e.g., `0.28`) will merge more speakers together and reduce over-detection. |
+| `min_speaker_samples` | `16000` | `8000`+ | Minimum audio samples (at 16kHz) required for speaker identification. `16000` = 1 second, `32000` = 2 seconds. Higher values increase accuracy but may miss short utterances. |
 | `noise_floor` | `0.001` | `0.0` - `1.0` | **(Higher = More Strict)**. The minimum audio volume required to trigger a transcription. Blocks below this level skip all heavy processing to save CPU. |
 
 ## 📜 License

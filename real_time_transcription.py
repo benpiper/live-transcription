@@ -133,12 +133,16 @@ def transcribe_audio_loop():
     
     while not stop_event.is_set():
         try:
-            # Check for backlog
+            # Check for backlog - configurable behavior
             q_size = audio_queue.qsize()
-            if q_size > 20:
+            max_queue_size = get_setting("max_queue_size", 0)  # 0 = no dropping
+            
+            if max_queue_size > 0 and q_size > max_queue_size:
                 print(f"\r[BACKLOG] Queue is {q_size} chunks deep. Dropping oldest...")
                 audio_queue.get_nowait()
                 continue
+            elif q_size > 50:  # Warn but don't drop
+                print(f"\r[WARNING] Queue is {q_size} chunks deep - transcription is behind")
             
             timestamp, new_chunk = audio_queue.get(timeout=0.2)
         except queue.Empty:

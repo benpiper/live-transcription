@@ -80,16 +80,42 @@ class SpeakerManager:
             flatness = librosa.feature.spectral_flatness(y=audio_chunk, n_fft=512)
             avg_flatness = float(np.mean(flatness))
             
+            # Get configurable thresholds from config
+            settings = TRANSCRIPTION_CONFIG["settings"]
+            pitch_std_threshold = settings.get("robot_pitch_std_threshold", 8.0)  # Lower = stricter
+            flatness_threshold = settings.get("robot_flatness_threshold", 0.12)   # Higher = stricter
+            debug_robo = settings.get("debug_robo", False)
+            
             # Robotic detection heuristics:
-            # 1. Very low pitch variance (< 10 Hz std dev)
-            # 2. OR very high spectral flatness (> 0.15)
-            is_robotic = (f0_std < 10.0) or (avg_flatness > 0.15)
+            # High-quality TTS often has:
+            # 1. Unnaturally CLEAN audio (low flatness - no breath/lip noise)
+            # 2. OR very low pitch variance (monotone)
+            # Human speech has natural noise from breathing, lip sounds, etc.
+            too_clean = avg_flatness < flatness_threshold  # Flipped: LOW flatness = synthetic
+            low_pitch_variance = f0_std < pitch_std_threshold
+            is_robotic = too_clean or low_pitch_variance
+            
+            # Verbose debug output
+            if debug_robo:
+                import sys
+                pitch_marker = "✗" if low_pitch_variance else "✓"
+                clean_marker = "✗" if too_clean else "✓"
+                result = "🤖 BOT" if is_robotic else "👤 HUMAN"
+                sys.stdout.write(f"\r" + " " * 80 + "\r")
+                print(f"[RoboDebug] pitch_std={f0_std:.1f}Hz {pitch_marker} | flatness={avg_flatness:.3f} (too_clean:{clean_marker}) → {result}")
+            
+            logger.debug(
+                f"RoboCheck: pitch_std={f0_std:.2f} (thresh:{pitch_std_threshold}), "
+                f"flatness={avg_flatness:.4f} (thresh:{flatness_threshold}), "
+                f"result={'BOT' if is_robotic else 'HUMAN'}"
+            )
             
             return is_robotic, float(f0_mean), float(f0_std), avg_flatness
             
         except Exception as e:
             logger.debug(f"Robotic voice detection failed: {e}")
             return False, 0, 0, 0
+
     
     def identify_speaker(
         self, 

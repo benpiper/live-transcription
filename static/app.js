@@ -292,7 +292,7 @@ function addTranscriptItem(data) {
     const confidence = data.confidence || 0;
     let confClass = 'conf-high';
     if (confidence < -0.7) confClass = 'conf-low';
-    else if (confidence < -0.5) confClass = 'conf-med';
+    else if (confidence < -0.6) confClass = 'conf-med';
 
     item.innerHTML = `
         <div class="transcript-header">
@@ -697,6 +697,7 @@ function addWatchword() {
         watchwords.push(word);
         localStorage.setItem('watchwords', JSON.stringify(watchwords));
         renderWatchwords();
+        reApplyWatchwordHighlights();
         input.value = '';
     }
 }
@@ -705,13 +706,32 @@ function removeWatchword(index) {
     watchwords.splice(index, 1);
     localStorage.setItem('watchwords', JSON.stringify(watchwords));
     renderWatchwords();
+    reApplyWatchwordHighlights();
 }
 
 function clearWatchwords() {
     watchwords = [];
     localStorage.removeItem('watchwords');
     renderWatchwords();
+    reApplyWatchwordHighlights();
 }
+
+function reApplyWatchwordHighlights() {
+    // Re-evaluate all displayed transcript items for watchword matches
+    const items = document.querySelectorAll('.transcript-item');
+    items.forEach(item => {
+        const textEl = item.querySelector('.transcript-text');
+        if (!textEl) return;
+
+        const text = textEl.textContent || '';
+        if (checkWatchwords(text)) {
+            item.classList.add('highlight');
+        } else {
+            item.classList.remove('highlight');
+        }
+    });
+}
+
 
 // Event Listeners for Watchwords
 document.getElementById('add-watchword').addEventListener('click', addWatchword);
