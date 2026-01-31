@@ -312,6 +312,14 @@ def boot_app():
     """Initialize the application (model loading, speaker model, etc.)."""
     global speaker_model
     
+    # Initialize session with config (validates config at startup)
+    from session import init_session
+    session = init_session(args.config)
+    
+    # Log any config validation warnings
+    if session.get_config_errors():
+        print(f"⚠️  {len(session.get_config_errors())} config warning(s) - see above")
+    
     if args.diarize:
         print("Loading speaker identification model...")
         from speechbrain.inference.speaker import EncoderClassifier
@@ -319,14 +327,13 @@ def boot_app():
             source="speechbrain/spkrec-ecapa-voxceleb",
             run_opts={"device": "cpu"}
         )
+        # Also set on session for future use
+        session.speaker_model = speaker_model
     
     if args.output:
         transcribe_audio_loop.output_file = args.output
+        session.set_output_file(args.output)
         print(f"Transcription will be saved to {args.output}")
-    
-    # Load config
-    if args.config:
-        load_config(args.config)
     
     # Load Whisper model
     load_model()

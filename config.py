@@ -101,3 +101,94 @@ def get_vocabulary() -> list:
 def get_corrections() -> dict:
     """Get the corrections dictionary for post-processing."""
     return TRANSCRIPTION_CONFIG.get("corrections", {})
+
+
+def validate_config() -> list:
+    """
+    Validate the current configuration and return any errors/warnings.
+    
+    Checks types, ranges, and logical constraints.
+    
+    Returns:
+        List of error/warning messages. Empty list means valid config.
+    """
+    errors = []
+    settings = TRANSCRIPTION_CONFIG.get("settings", {})
+    
+    # Type validations
+    type_checks = {
+        "beam_size": int,
+        "min_silence_duration_ms": int,
+        "cpu_threads": int,
+        "min_speaker_samples": int,
+        "no_speech_threshold": (int, float),
+        "log_prob_threshold": (int, float),
+        "compression_ratio_threshold": (int, float),
+        "avg_logprob_cutoff": (int, float),
+        "no_speech_prob_cutoff": (int, float),
+        "extreme_confidence_cutoff": (int, float),
+        "min_window_sec": (int, float),
+        "max_window_sec": (int, float),
+        "noise_floor": (int, float),
+        "diarization_threshold": (int, float),
+        "detect_bots": bool,
+        "debug_robo": bool,
+        "device": str,
+        "model_size": str,
+        "compute_type": str,
+    }
+    
+    for key, expected_type in type_checks.items():
+        if key in settings:
+            value = settings[key]
+            if not isinstance(value, expected_type):
+                errors.append(f"'{key}' should be {expected_type.__name__ if isinstance(expected_type, type) else 'number'}, got {type(value).__name__}")
+    
+    # Range validations (wrapped in try/except in case types are wrong)
+    try:
+        if settings.get("beam_size", 5) < 1 or settings.get("beam_size", 5) > 20:
+            errors.append("beam_size should be between 1 and 20")
+        
+        if settings.get("cpu_threads", 4) < 1:
+            errors.append("cpu_threads must be at least 1")
+        
+        if settings.get("noise_floor", 0.001) < 0 or settings.get("noise_floor", 0.001) > 1:
+            errors.append("noise_floor should be between 0.0 and 1.0")
+        
+        if settings.get("diarization_threshold", 0.35) < 0 or settings.get("diarization_threshold", 0.35) > 1:
+            errors.append("diarization_threshold should be between 0.0 and 1.0")
+        
+        # Logical constraints
+        min_win = settings.get("min_window_sec", 1.0)
+        max_win = settings.get("max_window_sec", 5.0)
+        if max_win <= min_win:
+            errors.append(f"max_window_sec ({max_win}) must be greater than min_window_sec ({min_win})")
+        
+        if settings.get("min_speaker_samples", 16000) < 4000:
+            errors.append("min_speaker_samples should be at least 4000 (0.25 seconds)")
+    except TypeError:
+        # Skip range checks if types are invalid - type errors already logged above
+        pass
+    
+    # Valid model sizes
+    valid_models = ["tiny", "tiny.en", "base", "base.en", "small", "small.en", 
+                    "medium", "medium.en", "large", "large-v1", "large-v2", "large-v3"]
+    model_size = settings.get("model_size", "medium.en")
+    if model_size not in valid_models:
+        errors.append(f"model_size '{model_size}' is not valid. Choose from: {', '.join(valid_models)}")
+    
+    # Valid devices
+    valid_devices = ["auto", "cuda", "cpu"]
+    device = settings.get("device", "auto")
+    if device not in valid_devices:
+        errors.append(f"device '{device}' is not valid. Choose from: {', '.join(valid_devices)}")
+    
+    # Log results
+    if errors:
+        for err in errors:
+            logger.warning(f"Config validation: {err}")
+            print(f"⚠️  Config warning: {err}")
+    else:
+        logger.info("Config validation passed")
+    
+    return errors
