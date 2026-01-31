@@ -552,6 +552,22 @@ canvas {
     /* red-400 */
 }
 
+.btn-small {
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-small:hover {
+    opacity: 0.8;
+}
+
+
 #watchword-input {
     flex: 1;
     background: var(--input-bg);

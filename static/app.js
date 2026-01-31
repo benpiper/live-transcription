@@ -558,12 +558,9 @@ function deleteAudioFromDB(id) {
 }
 
 function pruneHistory() {
-    const limitInput = document.getElementById('history-limit');
-    if (!limitInput) return;
-    const limit = parseInt(limitInput.value) || 10;
-
-    // Save to localStorage
-    localStorage.setItem('history-limit', limit);
+    // Use ONLY the saved limit from localStorage, not the input field
+    const savedLimit = localStorage.getItem('history-limit');
+    const limit = savedLimit ? parseInt(savedLimit) : 60;
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
@@ -578,6 +575,20 @@ function pruneHistory() {
     }
     saveHistoryToLocal();
 }
+
+function applyHistoryLimit() {
+    // Read from input, save to localStorage, then prune
+    const limitInput = document.getElementById('history-limit');
+    if (!limitInput) return;
+    const limit = parseInt(limitInput.value) || 60;
+
+    // Save to localStorage
+    localStorage.setItem('history-limit', limit);
+
+    // Now prune using the newly saved value
+    pruneHistory();
+}
+
 
 function saveHistoryToLocal() {
     // Only save the text/metadata, audio is in IndexedDB
@@ -664,6 +675,8 @@ function renderHistoryItemIndividually(data) {
 
 // Initial setup for history limit
 const limitInput = document.getElementById('history-limit');
+const applyHistoryBtn = document.getElementById('apply-history-limit');
+
 if (limitInput) {
     const savedLimit = localStorage.getItem('history-limit');
     if (savedLimit) {
@@ -671,9 +684,12 @@ if (limitInput) {
     } else {
         limitInput.value = 60; // New default
     }
-
-    limitInput.addEventListener('input', pruneHistory);
 }
+
+if (applyHistoryBtn) {
+    applyHistoryBtn.addEventListener('click', applyHistoryLimit);
+}
+
 
 // Watchword Management
 function renderWatchwords() {

@@ -184,8 +184,17 @@ def transcribe_chunk(
     if max_val > 0.01:
         audio_flat = audio_flat / max_val
     
+    # Get settings
+    settings = TRANSCRIPTION_CONFIG["settings"]
+    
     # Build initial prompt
     prompt_parts = []
+    
+    # Add base prompt from config (domain context)
+    base_prompt = settings.get("initial_prompt", "")
+    if base_prompt:
+        prompt_parts.append(base_prompt)
+    
     vocabulary = get_vocabulary()
     if vocabulary:
         prompt_parts.append(", ".join(vocabulary))
@@ -196,9 +205,7 @@ def transcribe_chunk(
         prompt_parts.append(last_text[-200:])
     
     initial_prompt = " | ".join(prompt_parts) if prompt_parts else None
-    
-    # Get settings
-    settings = TRANSCRIPTION_CONFIG["settings"]
+
     
     # Transcribe
     try:
@@ -230,7 +237,21 @@ def transcribe_chunk(
         r"^(Bye|Goodbye)[\.\!\s]*$",
         r"^(Hmm+|Uh+|Um+)[\.\!\s]*$",
         r"^[\.\!\?\s\-]+$",
-        r"^\s*$"
+        r"^\s*$",
+        # Subtitle/caption credits
+        r"(?i)subtitles?\s*(by|from|created)",
+        r"(?i)amara\.org",
+        r"(?i)transcribed\s*by",
+        r"(?i)captioned\s*by",
+        r"(?i)translated\s*by",
+        # Music/sound notation
+        r"^\[.*\]$",
+        r"^♪.*♪$",
+        r"^\(.*\)$",
+        # Sponsor/promo spam
+        r"(?i)subscribe\s*(to|and|now)",
+        r"(?i)like\s*(and|this)\s*video",
+        r"(?i)don'?t\s*forget\s*to",
     ]
     
     for segment in segments:
