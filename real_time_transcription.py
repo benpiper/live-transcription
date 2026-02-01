@@ -431,7 +431,6 @@ parser.add_argument("--web", "-w", action="store_true", help="Enable the web das
 parser.add_argument("--port", type=int, default=8000, help="Web dashboard port")
 parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit")
 parser.add_argument("--device", type=int, help="Input device ID")
-parser.add_argument("--debug-robo", action="store_true", help="Print robotic voice detection stats")
 parser.add_argument("--reload", action="store_true", help="Auto-reload on code changes (Web mode only)")
 parser.add_argument("--session", "-s", type=str, help="Load or create a named session")
 parser.add_argument("--list-sessions", action="store_true", help="List all saved sessions and exit")

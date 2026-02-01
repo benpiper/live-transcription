@@ -28,11 +28,12 @@ DEFAULT_CONFIG = {
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 1.0,
         "max_window_sec": 5.0,
-        "detect_bots": False,
         "cpu_threads": 4,
         "noise_floor": 0.001,
         "diarization_threshold": 0.35,
-        "min_speaker_samples": 16000
+        "min_speaker_samples": 16000,
+        "voice_profiles_dir": "voice_profiles",
+        "voice_match_threshold": 0.7
     }
 }
 
@@ -131,11 +132,11 @@ def validate_config() -> list:
         "max_window_sec": (int, float),
         "noise_floor": (int, float),
         "diarization_threshold": (int, float),
-        "detect_bots": bool,
-        "debug_robo": bool,
+        "voice_match_threshold": (int, float),
         "device": str,
         "model_size": str,
         "compute_type": str,
+        "voice_profiles_dir": str,
     }
     
     for key, expected_type in type_checks.items():

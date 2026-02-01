@@ -7,7 +7,7 @@ A high-performance, real-time audio transcription tool using the `faster-whisper
 - **Real-time Transcription**: Transcribes audio as you speak with minimal latency.
 - **Web Dashboard**: A modern, glassmorphic web interface to monitor transcription feeds, audio volume, and performance telemetry (Latency, Buffer).
 - **Speaker Identification (Diarization)**: Automatically identifies and labels different speakers (e.g., `[Speaker 1]`) using ECAPA-TDNN voice embeddings.
-- **Robotic Voice Detection**: Automatically identifies synthetic/computer-generated voices (e.g., dispatchers) and labels them as `[Dispatcher (Bot)]`.
+- **Voice Profiles**: Pre-register known speakers (dispatchers, IVR systems, key personnel) for instant identification by name.
 - **Advanced Timestamps**: All outputs include full date/time stamps (e.g., `[2026-01-25 23:46:16]`) for accurate logging.
 - **Silence-Aware Chunking**: Intelligently waits for natural pauses in speech to transcribe, preventing mid-word cut-offs.
 - **Hallucination Suppression**: Advanced filtering using `no_speech_prob`, `avg_logprob`, and `compression_ratio` to eliminate "YouTube-style" ghosts.
@@ -69,7 +69,6 @@ python3 real_time_transcription.py --input test.mp3 --diarize --web --config con
 | `--list-devices` | | List available audio devices and exit |
 | `--device` | | Selected input device ID |
 | `--reload` | | Auto-reload backend on code changes (Web mode only) |
-| `--debug-robo` | | Print robotic voice detection stats for debugging |
 
 ## 📁 Sessions
 
@@ -109,7 +108,7 @@ The application follows a **client-server architecture** with a Python backend a
 │  │ Audio Input  │───▶│ Transcription      │───▶│ FastAPI Server    │   │
 │  │ (sounddevice)│    │ Engine (Whisper)   │    │ (uvicorn)         │   │
 │  └──────────────┘    │ + Diarization      │    │ ├─ REST API       │   │
-│                      │ + Bot Detection    │    │ └─ WebSocket /ws  │   │
+│                      │ + Voice Profiles   │    │ └─ WebSocket /ws  │   │
 │                      └────────────────────┘    └─────────┬─────────┘   │
 │                                                          │             │
 │  Session Storage: sessions/*.json (transcripts + metadata)             │
@@ -136,7 +135,7 @@ The application follows a **client-server architecture** with a Python backend a
 | **Audio Capture** | `sounddevice` | Captures realtime PCM audio from microphone or file |
 | **Transcription Engine** | `faster-whisper` | Converts audio to text with VAD-aware chunking |
 | **Speaker Diarization** | SpeechBrain ECAPA-TDNN | Identifies and labels different speakers |
-| **Bot Detection** | Pitch/spectral analysis | Detects synthetic TTS voices |
+| **Voice Profiles** | JSON embeddings | Matches known speakers by pre-registered voice signatures |
 | **Web Server** | FastAPI + Uvicorn | Serves static files, REST API, and WebSocket |
 | **Session Storage** | JSON files | Persists transcript text and metadata on server |
 
@@ -207,13 +206,32 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `min_silence_duration_ms` | `500` | `0`+ | How long a silence gap must be to trigger the end of a sentence. |
 | `initial_prompt` | `""` | string | Domain context to guide Whisper. Example: `"Emergency dispatch radio. 10-codes, unit numbers, street addresses."` Improves accuracy for specialized audio. |
 | `max_queue_size` | `0` | `0`+ | Maximum audio chunks before dropping old ones. `0` = never drop (recommended). Set to `20+` if you need real-time priority over completeness. |
-| `detect_bots` | `false` | `true` / `false` | When enabled, analyzes pitch and spectral features to identify synthetic/TTS voices and labels them as `[Dispatcher (Bot)]`. Works with or without `--diarize`. |
-| `debug_robo` | `false` | `true` / `false` | Prints real-time robot detection debug output showing pitch_std and flatness values for tuning. |
-| `robot_pitch_std_threshold` | `8.0` | `0.0`+ | **(Lower = More Strict)**. Flags voices with pitch standard deviation below this as monotone/robotic. Human speech typically varies 20-100+ Hz. |
-| `robot_flatness_threshold` | `0.012` | `0.0` - `1.0` | **(Higher = More Strict)**. Flags unnaturally "clean" audio (low spectral flatness) as synthetic. TTS voices often have flatness < 0.01 due to lack of breath noise. |
 | `diarization_threshold` | `0.35` | `0.0` - `1.0` | **(Lower = More Inclusive)**. Sensitivity for merging voice embeddings. Lowering this value (e.g., `0.28`) will merge more speakers together and reduce over-detection. |
 | `min_speaker_samples` | `16000` | `8000`+ | Minimum audio samples (at 16kHz) required for speaker identification. `16000` = 1 second, `32000` = 2 seconds. Higher values increase accuracy but may miss short utterances. |
 | `noise_floor` | `0.001` | `0.0` - `1.0` | **(Higher = More Strict)**. The minimum audio volume required to trigger a transcription. Blocks below this level skip all heavy processing to save CPU. |
+| `voice_profiles_dir` | `voice_profiles` | string | Directory containing voice profile JSON files. |
+| `voice_match_threshold` | `0.7` | `0.0` - `1.0` | **(Higher = More Strict)**. Cosine similarity threshold for matching voice profiles. Higher values require closer matches. |
+
+## 🎤 Voice Profiles
+
+Pre-register known speakers for instant identification by name instead of generic "Speaker N" labels.
+
+### Enroll a New Profile
+```bash
+python3 enroll_voice.py enroll --name "Dispatcher A" --samples dispatch1.wav dispatch2.wav
+```
+
+### List Profiles
+```bash
+python3 enroll_voice.py list
+```
+
+### Delete a Profile
+```bash
+python3 enroll_voice.py delete --name "Dispatcher A"
+```
+
+Profiles are stored as JSON files in the `voice_profiles/` directory. Each profile contains an averaged voice embedding extracted from the sample audio files.
 
 ## 📜 License
 
