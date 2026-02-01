@@ -1029,13 +1029,14 @@ const scrollLockIcon = document.getElementById('scroll-lock-icon');
 
 function updateScrollLockUI() {
     if (scrollLockIcon) {
-        scrollLockIcon.textContent = isScrollLocked ? '🔒' : '🔓';
+        scrollLockIcon.textContent = isScrollLocked ? '⏸ PAUSED' : '▼ LIVE';
     }
     if (scrollLockBtn) {
         scrollLockBtn.classList.toggle('active', isScrollLocked);
+        scrollLockBtn.classList.toggle('locked', isScrollLocked);
         scrollLockBtn.title = isScrollLocked
-            ? 'Scroll Locked - Click to unlock and jump to bottom'
-            : 'Scroll Lock (auto-engages when scrolling up)';
+            ? 'Scroll paused - Click to resume auto-scroll'
+            : 'Auto-scrolling - Scroll up to pause';
     }
 }
 

@@ -179,6 +179,30 @@ main {
     border-color: var(--primary);
 }
 
+/* Scroll status button */
+.scroll-status {
+    width: auto;
+    padding: 4px 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--success);
+    border-color: var(--success);
+}
+
+.scroll-status.locked {
+    color: #fbbf24;
+    border-color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.section-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .header-right {
     display: flex;
     align-items: center;
