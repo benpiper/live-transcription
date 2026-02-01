@@ -265,10 +265,14 @@ function addTranscriptItem(data, fromSession = false) {
         const latency = (Date.now() / 1000) - data.origin_time;
         latencyStat.textContent = `${(latency * 1000).toFixed(0)}ms`;
 
-        // Extract related audio from history
-        // We look for chunks that happened AFTER origin_time - 1.0s (extra lead-in)
+        // Extract related audio from history with proper boundaries
+        // Start: origin_time - 0.5s (small lead-in)
+        // End: current time (when transcript arrived)
+        const segmentStart = data.origin_time - 0.5;
+        const segmentEnd = Date.now() / 1000;  // Current time as end boundary
+
         const segmentChunks = rawAudioHistory
-            .filter(item => item.timestamp >= data.origin_time - 1.0)
+            .filter(item => item.timestamp >= segmentStart && item.timestamp <= segmentEnd)
             .map(item => item.chunk);
 
         if (segmentChunks.length > 0) {
@@ -301,7 +305,7 @@ function addTranscriptItem(data, fromSession = false) {
             saveHistoryToLocal();
             pruneHistory();
         } else {
-            console.warn(`No audio chunks found for segment starting at ${data.origin_time}. Buffer range: ${rawAudioHistory.length > 0 ? rawAudioHistory[0].timestamp : 'empty'} to ${rawAudioHistory.length > 0 ? rawAudioHistory[rawAudioHistory.length - 1].timestamp : 'empty'}`);
+            console.warn(`No audio chunks found for segment ${segmentStart.toFixed(2)} - ${segmentEnd.toFixed(2)}. Buffer range: ${rawAudioHistory.length > 0 ? rawAudioHistory[0].timestamp.toFixed(2) : 'empty'} to ${rawAudioHistory.length > 0 ? rawAudioHistory[rawAudioHistory.length - 1].timestamp.toFixed(2) : 'empty'}`);
         }
     }
 
