@@ -304,7 +304,7 @@ function createTranscriptElement(data, fromSession = false) {
             <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
-                <span class="timestamp">${data.timestamp}</span>
+                <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
                     ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
                     ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
@@ -364,6 +364,7 @@ function addTranscriptItem(data, fromSession = false) {
                 audio: combinedAudio,
                 timestamp: data.timestamp,
                 origin_time: data.origin_time,
+                duration: data.duration,
                 confidence: data.confidence
             };
 
@@ -402,7 +403,7 @@ function addTranscriptItem(data, fromSession = false) {
             <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
-                <span class="timestamp">${data.timestamp}</span>
+                <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
                     ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
                     ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
@@ -705,6 +706,7 @@ function saveHistoryToLocal() {
         text: h.text,
         timestamp: h.timestamp,
         origin_time: h.origin_time,
+        duration: h.duration,
         confidence: h.confidence
     }));
     localStorage.setItem('transcription-history', JSON.stringify(historyToSave));
@@ -763,7 +765,7 @@ function renderHistoryItemIndividually(data) {
             <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
-                <span class="timestamp">${data.timestamp}</span>
+                <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 ${data.audio ? '' : '<span class="text-muted" style="font-size: 0.7rem; margin-left: 8px;">(Text Only)</span>'}
                 <div class="action-buttons">
                     ${data.audio ? `

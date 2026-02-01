@@ -239,6 +239,7 @@ def output_transcription(merged_segments, start_time, audio_flat):
                 "type": "transcript",
                 "timestamp": display_time,
                 "origin_time": start_time.timestamp() + m["start"],
+                "duration": m["end"] - m["start"],
                 "speaker": m["speaker"],
                 "text": m["text"],
                 "confidence": conf_val
@@ -268,6 +269,7 @@ def output_transcription(merged_segments, start_time, audio_flat):
                 session.add_transcript({
                     "timestamp": display_time,
                     "origin_time": start_time.timestamp() + m["start"],
+                    "duration": m["end"] - m["start"],
                     "speaker": m["speaker"],
                     "text": m["text"],
                     "confidence": conf_val
