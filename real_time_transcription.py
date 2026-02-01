@@ -29,6 +29,7 @@ warnings.filterwarnings("ignore", message=".*autocast.*")
 logging.getLogger("speechbrain").setLevel(logging.ERROR)
 logging.getLogger("torch").setLevel(logging.ERROR)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
+logging.getLogger("faster_whisper").setLevel(logging.WARNING)
 
 # Configure logging
 logging.basicConfig(
@@ -370,12 +371,12 @@ def boot_app():
     transcription_thread.start()
     print("Core processing threads started.")
     
-    # Auto-save session every 60 seconds if --session flag is used
+    # Auto-save session periodically if --session flag is used
     if session_name:
         def autosave_loop():
             from session import save_session, get_session
             while not stop_event.is_set():
-                time.sleep(60)
+                time.sleep(120)
                 try:
                     s = get_session()
                     if s and len(s.transcripts) > 0:
@@ -385,7 +386,7 @@ def boot_app():
                     logger.warning(f"Auto-save failed: {e}")
         
         threading.Thread(target=autosave_loop, daemon=True).start()
-        print(f"📁 Session will auto-save every 60 seconds.")
+        print(f"📁 Session will auto-save.")
 
 
 def run_input_source():
