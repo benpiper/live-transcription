@@ -28,6 +28,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", message=".*autocast.*")
 logging.getLogger("speechbrain").setLevel(logging.ERROR)
 logging.getLogger("torch").setLevel(logging.ERROR)
+logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 # Configure logging
 logging.basicConfig(
@@ -379,7 +380,7 @@ def boot_app():
                     s = get_session()
                     if s and len(s.transcripts) > 0:
                         save_session(s)
-                        logger.info(f"Session auto-saved: {s.name} ({len(s.transcripts)} transcripts)")
+                        logger.debug(f"Session auto-saved: {s.name} ({len(s.transcripts)} transcripts)")
                 except Exception as e:
                     logger.warning(f"Auto-save failed: {e}")
         
