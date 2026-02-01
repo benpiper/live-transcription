@@ -52,6 +52,7 @@ let activeSpeakerFilter = null;
 let watchwords = [];
 let theme = 'dark';
 let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
+let sessionLoaded = false;   // Prevents processing new transcripts until session is loaded
 
 // Analysis node for spectrum visualization
 let analyser;
@@ -73,8 +74,7 @@ dbRequest.onupgradeneeded = (event) => {
 dbRequest.onsuccess = (event) => {
     db = event.target.result;
     console.log("IndexedDB initialized");
-    // Load history after DB is ready
-    loadHistoryFromLocal();
+    // Audio will be matched when loadCurrentSession runs
 };
 
 dbRequest.onerror = (event) => {
@@ -105,15 +105,38 @@ async function loadCurrentSession() {
             // Clear existing transcripts to avoid duplicates
             transcriptFeed.innerHTML = '';
             transcriptionHistory = [];
+            speakers.clear();
 
             // Batch DOM updates using DocumentFragment
             const fragment = document.createDocumentFragment();
 
             for (const t of data.transcripts) {
-                const element = createTranscriptElement(t, true);  // true = from session
+                // Try to match audio from IndexedDB using origin_time
+                let audioData = null;
+                if (t.origin_time && db) {
+                    const audioKey = `audio-${t.origin_time}`;
+                    audioData = await getAudioFromDB(audioKey);
+                }
+
+                // Add to transcriptionHistory for playback
+                const historyItem = {
+                    id: t.origin_time ? `audio-${t.origin_time}` : null,
+                    speaker: t.speaker,
+                    text: t.text,
+                    audio: audioData,
+                    timestamp: t.timestamp,
+                    origin_time: t.origin_time,
+                    duration: t.duration,
+                    confidence: t.confidence
+                };
+                if (audioData) {
+                    transcriptionHistory.push(historyItem);
+                }
+
+                const element = createTranscriptElement(t, true, audioData);  // Pass audio data
                 fragment.appendChild(element);
 
-                // Track speakers (but don't render filters yet)
+                // Track speakers
                 const itemSpeaker = t.speaker || 'Unknown';
                 speakers.add(itemSpeaker);
             }
@@ -143,13 +166,14 @@ function connect() {
     ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
 
-    ws.onopen = () => {
+    ws.onopen = async () => {
         console.log("WebSocket connected");
         statusBadge.textContent = 'Connected';
         statusBadge.classList.add('connected');
 
-        // Load current session transcripts
-        loadCurrentSession();
+        // Load current session transcripts BEFORE processing new messages
+        await loadCurrentSession();
+        sessionLoaded = true;
     };
 
     ws.onclose = (e) => {
@@ -171,6 +195,10 @@ function connect() {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'transcript') {
+                    if (!sessionLoaded) {
+                        console.log("Skipping transcript - session not loaded yet");
+                        return;
+                    }
                     console.log("Received transcript:", data.text);
                     addTranscriptItem(data);
                 } else if (data.type === 'volume') {
@@ -275,9 +303,17 @@ function triggerNotification(text) {
 }
 
 // Creates a transcript DOM element without appending it (for batch operations)
-function createTranscriptElement(data, fromSession = false) {
+function createTranscriptElement(data, fromSession = false, audioData = null) {
     const item = document.createElement('div');
     item.className = 'transcript-item';
+
+    // Set ID based on origin_time (for audio matching)
+    if (data.origin_time) {
+        item.dataset.id = `audio-${data.origin_time}`;
+    }
+
+    // Mark if audio is available
+    const hasAudio = audioData !== null;
 
     // Check for watchwords
     if (checkWatchwords(data.text)) {
@@ -306,8 +342,8 @@ function createTranscriptElement(data, fromSession = false) {
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
-                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
-                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                    ${hasAudio && item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
+                    ${hasAudio && item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
                 </div>
             </div>
         </div>
@@ -356,7 +392,8 @@ function addTranscriptItem(data, fromSession = false) {
                 offset += chunk.length;
             }
 
-            const itemId = `segment-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            // Use origin_time as key for audio matching
+            const itemId = `audio-${data.origin_time}`;
             const historyItem = {
                 id: itemId,
                 speaker: data.speaker,
@@ -374,7 +411,6 @@ function addTranscriptItem(data, fromSession = false) {
             item.dataset.id = itemId;
 
             saveAudioToDB(itemId, combinedAudio);
-            saveHistoryToLocal();
             pruneHistory();
         } else {
             console.warn(`No audio chunks found for segment ${segmentStart.toFixed(2)} - ${segmentEnd.toFixed(2)}. Buffer range: ${rawAudioHistory.length > 0 ? rawAudioHistory[0].timestamp.toFixed(2) : 'empty'} to ${rawAudioHistory.length > 0 ? rawAudioHistory[rawAudioHistory.length - 1].timestamp.toFixed(2) : 'empty'}`);
@@ -681,7 +717,6 @@ function pruneHistory() {
             segmentEl.remove();
         }
     }
-    saveHistoryToLocal();
 }
 
 function applyHistoryLimit() {
@@ -698,89 +733,9 @@ function applyHistoryLimit() {
 }
 
 
-function saveHistoryToLocal() {
-    // Only save the text/metadata, audio is in IndexedDB
-    const historyToSave = transcriptionHistory.map(h => ({
-        id: h.id,
-        speaker: h.speaker,
-        text: h.text,
-        timestamp: h.timestamp,
-        origin_time: h.origin_time,
-        duration: h.duration,
-        confidence: h.confidence
-    }));
-    localStorage.setItem('transcription-history', JSON.stringify(historyToSave));
-}
 
-async function loadHistoryFromLocal() {
-    const saved = localStorage.getItem('transcription-history');
-    if (saved) {
-        try {
-            const items = JSON.parse(saved);
-            for (const item of items) {
-                // Try to restore audio from DB
-                const audio = await getAudioFromDB(item.id);
-                if (audio) {
-                    item.audio = audio;
-                }
 
-                // Add to feed
-                renderHistoryItemIndividually(item);
-                // Push to memory history so play/download buttons work
-                transcriptionHistory.push(item);
-                // Track speakers
-                const itemSpeaker = item.speaker || 'Unknown';
-                speakers.add(itemSpeaker);
-            }
-            renderSpeakerFilters();
-            document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
-        } catch (e) {
-            console.error("Error loading history:", e);
-        }
-    }
-}
 
-function renderHistoryItemIndividually(data) {
-    const placeholder = transcriptFeed.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
-    const item = document.createElement('div');
-    item.className = 'transcript-item';
-    item.dataset.id = data.id;
-    item.dataset.speaker = data.speaker || 'Unknown';
-
-    // Check for watchwords (mostly for color)
-    if (checkWatchwords(data.text)) {
-        item.classList.add('highlight');
-    }
-
-    // Confidence styling
-    const confidence = data.confidence || 0;
-    let confClass = 'conf-high';
-    if (confidence < -0.7) confClass = 'conf-low';
-    else if (confidence < -0.5) confClass = 'conf-med';
-
-    item.innerHTML = `
-        <div class="transcript-header">
-            <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
-            <div class="timestamp-wrapper">
-                <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
-                <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
-                ${data.audio ? '' : '<span class="text-muted" style="font-size: 0.7rem; margin-left: 8px;">(Text Only)</span>'}
-                <div class="action-buttons">
-                    ${data.audio ? `
-                        <button class="play-btn" onclick="playSegment('${data.id}')" title="Play audio">▶️</button>
-                        <button class="download-btn" onclick="downloadSegment('${data.id}')" title="Download clip">📥</button>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-        <div class="transcript-text">${data.text}</div>
-    `;
-
-    transcriptFeed.appendChild(item);
-    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
-}
 
 // Initial setup for history limit
 const limitInput = document.getElementById('history-limit');
