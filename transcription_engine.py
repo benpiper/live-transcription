@@ -206,6 +206,8 @@ def transcribe_chunk(
     
     initial_prompt = " | ".join(prompt_parts) if prompt_parts else None
 
+    # Debug: Log the prompt being sent to Whisper
+    logger.info(f"Whisper prompt ({len(initial_prompt) if initial_prompt else 0} chars): {initial_prompt}")
     
     # Transcribe
     try:

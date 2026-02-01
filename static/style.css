@@ -711,3 +711,25 @@ canvas {
         width: 100%;
     }
 }
+
+/* Watchword inline highlight */
+.watchword-highlight {
+    background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+    color: #fff;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-weight: 600;
+    animation: pulse-highlight 1s ease-in-out 2;
+}
+
+@keyframes pulse-highlight {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}

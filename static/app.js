@@ -225,6 +225,16 @@ function checkWatchwords(text) {
     return watchwords.some(word => lowerText.includes(word.toLowerCase()));
 }
 
+function highlightWatchwords(text) {
+    if (watchwords.length === 0) return text;
+    let result = text;
+    for (const word of watchwords) {
+        const regex = new RegExp(`(${word})`, 'gi');
+        result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
+    }
+    return result;
+}
+
 function triggerNotification(text) {
     if (!("Notification" in window)) return;
 
@@ -338,7 +348,7 @@ function addTranscriptItem(data, fromSession = false) {
                 </div>
             </div>
         </div>
-        <div class="transcript-text">${data.text}</div>
+        <div class="transcript-text">${highlightWatchwords(data.text)}</div>
     `;
 
     transcriptFeed.appendChild(item);
@@ -771,7 +781,13 @@ function reApplyWatchwordHighlights() {
         const textEl = item.querySelector('.transcript-text');
         if (!textEl) return;
 
+        // Get plain text (strip any existing highlights)
         const text = textEl.textContent || '';
+
+        // Re-apply inline highlights
+        textEl.innerHTML = highlightWatchwords(text);
+
+        // Toggle item highlight class
         if (checkWatchwords(text)) {
             item.classList.add('highlight');
         } else {
