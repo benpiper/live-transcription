@@ -420,7 +420,7 @@ def run_input_source():
 # CLI argument parsing
 parser = argparse.ArgumentParser(description="Live Transcription with Faster-Whisper")
 parser.add_argument("--input", type=str, help="Path to an audio file to test instead of microphone")
-parser.add_argument("--config", "-c", type=str, help="Path to config.json for vocabulary, corrections, and settings")
+parser.add_argument("--config", "-c", type=str, default="config.json", help="Path to config.json for vocabulary, corrections, and settings")
 parser.add_argument("--output", "-o", type=str, help="Path to save the transcribed text file")
 parser.add_argument("--diarize", "-d", action="store_true", help="Enable real-time speaker identification")
 parser.add_argument("--web", "-w", action="store_true", help="Enable the web dashboard")
@@ -477,8 +477,8 @@ if __name__ == "__main__":
                     host="0.0.0.0",
                     port=args.port,
                     reload=True,
-                    reload_includes=["*.json"],
-                    reload_excludes=["sessions/*"]
+                    reload_includes=["*.py", "*.html", "*.js", "*.css", "config.json"],
+                    reload_excludes=["sessions/*", "*.log", "transcript.txt"]
                 )
             else:
                 uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")

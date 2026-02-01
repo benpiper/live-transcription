@@ -92,6 +92,31 @@ audioToggle.addEventListener('click', () => {
     audioToggle.innerHTML = isAudioEnabled ? '<span>🔊</span> Mute Audio' : '<span>🔇</span> Enable Audio';
 });
 
+// Load current session transcripts from server
+async function loadCurrentSession() {
+    try {
+        const response = await fetch('/api/session/current');
+        const data = await response.json();
+
+        if (data.active && data.transcripts && data.transcripts.length > 0) {
+            console.log(`Loading ${data.transcripts.length} transcripts from session: ${data.name}`);
+
+            // Clear existing transcripts to avoid duplicates
+            transcriptFeed.innerHTML = '';
+            transcriptionHistory = [];
+
+            // Add each transcript
+            for (const t of data.transcripts) {
+                addTranscriptItem(t, true);  // true = from session (skip re-saving)
+            }
+
+            console.log(`Loaded ${data.transcripts.length} transcripts from session`);
+        }
+    } catch (err) {
+        console.log("No active session or error loading:", err);
+    }
+}
+
 function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -104,6 +129,9 @@ function connect() {
         console.log("WebSocket connected");
         statusBadge.textContent = 'Connected';
         statusBadge.classList.add('connected');
+
+        // Load current session transcripts
+        loadCurrentSession();
     };
 
     ws.onclose = (e) => {
@@ -218,7 +246,7 @@ function triggerNotification(text) {
     }
 }
 
-function addTranscriptItem(data) {
+function addTranscriptItem(data, fromSession = false) {
     // Remove placeholder
     const placeholder = transcriptFeed.querySelector('.placeholder');
     if (placeholder) placeholder.remove();
@@ -229,11 +257,11 @@ function addTranscriptItem(data) {
     // Check for watchwords
     if (checkWatchwords(data.text)) {
         item.classList.add('highlight');
-        triggerNotification(data.text);
+        if (!fromSession) triggerNotification(data.text);  // Don't notify for old items
     }
 
-    // Calculate true latency and extract segment audio
-    if (data.origin_time) {
+    // Calculate true latency and extract segment audio (skip for session-loaded items)
+    if (data.origin_time && !fromSession) {
         const latency = (Date.now() / 1000) - data.origin_time;
         latencyStat.textContent = `${(latency * 1000).toFixed(0)}ms`;
 

@@ -159,6 +159,21 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
             ws_manager.disconnect(websocket)
     
     # Session API endpoints
+    @app.get("/api/session/current")
+    async def get_current_session():
+        """Get the current active session's data."""
+        from session import get_session
+        session = get_session()
+        if session:
+            return {
+                "active": True,
+                "name": session.name,
+                "created_at": session.created_at,
+                "updated_at": session.updated_at,
+                "transcripts": session.transcripts
+            }
+        return {"active": False}
+    
     @app.get("/api/sessions")
     async def list_sessions_endpoint():
         """List all saved sessions."""
