@@ -51,6 +51,7 @@ let activePlaybackId = null;
 let activeSpeakerFilter = null;
 let watchwords = [];
 let theme = 'dark';
+let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
 
 // Analysis node for spectrum visualization
 let analyser;
@@ -105,10 +106,27 @@ async function loadCurrentSession() {
             transcriptFeed.innerHTML = '';
             transcriptionHistory = [];
 
-            // Add each transcript
+            // Batch DOM updates using DocumentFragment
+            const fragment = document.createDocumentFragment();
+
             for (const t of data.transcripts) {
-                addTranscriptItem(t, true);  // true = from session (skip re-saving)
+                const element = createTranscriptElement(t, true);  // true = from session
+                fragment.appendChild(element);
+
+                // Track speakers (but don't render filters yet)
+                const itemSpeaker = t.speaker || 'Unknown';
+                speakers.add(itemSpeaker);
             }
+
+            // Single DOM update
+            transcriptFeed.appendChild(fragment);
+
+            // Render speaker filters once after all items loaded
+            renderSpeakerFilters();
+            document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
+
+            // Scroll to bottom
+            transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
 
             console.log(`Loaded ${data.transcripts.length} transcripts from session`);
         }
@@ -256,6 +274,49 @@ function triggerNotification(text) {
     }
 }
 
+// Creates a transcript DOM element without appending it (for batch operations)
+function createTranscriptElement(data, fromSession = false) {
+    const item = document.createElement('div');
+    item.className = 'transcript-item';
+
+    // Check for watchwords
+    if (checkWatchwords(data.text)) {
+        item.classList.add('highlight');
+        if (!fromSession) triggerNotification(data.text);
+    }
+
+    const itemSpeaker = data.speaker || 'Unknown';
+    item.dataset.speaker = itemSpeaker;
+
+    // Apply active filter if necessary
+    if (activeSpeakerFilter && itemSpeaker !== activeSpeakerFilter) {
+        item.classList.add('filtered-out');
+    }
+
+    // Confidence styling
+    const confidence = data.confidence || 0;
+    let confClass = 'conf-high';
+    if (confidence < -0.7) confClass = 'conf-low';
+    else if (confidence < -0.6) confClass = 'conf-med';
+
+    item.innerHTML = `
+        <div class="transcript-header">
+            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
+            <div class="timestamp-wrapper">
+                <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
+                <span class="timestamp">${data.timestamp}</span>
+                <div class="action-buttons">
+                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
+                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                </div>
+            </div>
+        </div>
+        <div class="transcript-text">${highlightWatchwords(data.text)}</div>
+    `;
+
+    return item;
+}
+
 function addTranscriptItem(data, fromSession = false) {
     // Remove placeholder
     const placeholder = transcriptFeed.querySelector('.placeholder');
@@ -338,7 +399,7 @@ function addTranscriptItem(data, fromSession = false) {
 
     item.innerHTML = `
         <div class="transcript-header">
-            <span class="speaker ${data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot') ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
+            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}</span>
@@ -352,7 +413,9 @@ function addTranscriptItem(data, fromSession = false) {
     `;
 
     transcriptFeed.appendChild(item);
-    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    if (!isScrollLocked) {
+        transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    }
 }
 
 function drawVisualizer() {
@@ -429,8 +492,10 @@ function applySpeakerFilter(label) {
 
     console.log(`Speaker filter applied: ${label || 'Show All'}`);
 
-    // Smooth scroll to bottom after layout change
-    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    // Smooth scroll to bottom after layout change (respect scroll lock)
+    if (!isScrollLocked) {
+        transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    }
 }
 
 document.getElementById('reset-filters').addEventListener('click', () => applySpeakerFilter(null));
@@ -737,12 +802,18 @@ if (applyHistoryBtn) {
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
     list.innerHTML = '';
-    watchwords.forEach((word, index) => {
+
+    // Sort alphabetically for display
+    const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+    sortedWatchwords.forEach((word) => {
+        // Find original index for removal
+        const originalIndex = watchwords.indexOf(word);
         const tag = document.createElement('div');
         tag.className = 'tag';
         tag.innerHTML = `
             ${word}
-            <span class="remove" onclick="removeWatchword(${index})">×</span>
+            <span class="remove" onclick="removeWatchword(${originalIndex})">×</span>
         `;
         list.appendChild(tag);
     });
@@ -949,3 +1020,43 @@ if (savedWatchwords) {
 updateNotificationButton();
 
 connect();
+
+// Scroll Lock Functionality
+const scrollLockBtn = document.getElementById('scroll-lock');
+const scrollLockIcon = document.getElementById('scroll-lock-icon');
+
+function updateScrollLockUI() {
+    if (scrollLockIcon) {
+        scrollLockIcon.textContent = isScrollLocked ? '🔒' : '🔓';
+    }
+    if (scrollLockBtn) {
+        scrollLockBtn.classList.toggle('active', isScrollLocked);
+        scrollLockBtn.title = isScrollLocked
+            ? 'Scroll Locked - Click to unlock and jump to bottom'
+            : 'Scroll Lock (auto-engages when scrolling up)';
+    }
+}
+
+// Auto-engage scroll lock when user scrolls up
+transcriptFeed.addEventListener('scroll', () => {
+    const isAtBottom = transcriptFeed.scrollHeight - transcriptFeed.scrollTop <= transcriptFeed.clientHeight + 50;
+
+    if (!isAtBottom && !isScrollLocked) {
+        // User scrolled up, engage lock
+        isScrollLocked = true;
+        updateScrollLockUI();
+    }
+});
+
+// Toggle scroll lock on button click
+if (scrollLockBtn) {
+    scrollLockBtn.addEventListener('click', () => {
+        isScrollLocked = !isScrollLocked;
+        updateScrollLockUI();
+
+        // If unlocking, jump to bottom
+        if (!isScrollLocked) {
+            transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+        }
+    });
+}
