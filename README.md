@@ -99,39 +99,70 @@ Sessions are stored as JSON files in the `sessions/` directory.
 
 ## 🏗️ System Architecture
 
-The application is built with a multi-threaded, asynchronous design to ensure real-time performance and low-latency audio handling.
+The application follows a **client-server architecture** with a Python backend and JavaScript web frontend, designed for real-time audio processing with minimal latency.
 
-### 1. Data Flow & Threading
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              BACKEND (Python)                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐    ┌────────────────────┐    ┌───────────────────┐   │
+│  │ Audio Input  │───▶│ Transcription      │───▶│ FastAPI Server    │   │
+│  │ (sounddevice)│    │ Engine (Whisper)   │    │ (uvicorn)         │   │
+│  └──────────────┘    │ + Diarization      │    │ ├─ REST API       │   │
+│                      │ + Bot Detection    │    │ └─ WebSocket /ws  │   │
+│                      └────────────────────┘    └─────────┬─────────┘   │
+│                                                          │             │
+│  Session Storage: sessions/*.json (transcripts + metadata)             │
+└──────────────────────────────────────────────────────────┼─────────────┘
+                                                           │ WebSocket
+                                                           ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          FRONTEND (JavaScript)                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
+│  │ Real-time Feed   │  │ Audio Visualizer │  │ Session Management   │  │
+│  │ (transcript DOM) │  │ (Canvas API)     │  │ (load/save/switch)   │  │
+│  └──────────────────┘  └──────────────────┘  └──────────────────────┘  │
+│                                                                         │
+│  Audio Storage: IndexedDB (keyed by origin_time for playback)           │
+│  Settings: localStorage (theme, watchwords, history limit)              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-The system operates using three primary threads/processes coordinating via thread-safe queues:
+### Backend Components
 
-- **Audio Capture Thread**: Captures raw PCM audio from the microphone (using `sounddevice`) or reads from a file and pushes it into the `audio_queue`.
-- **Transcription Engine Thread**: 
-  - Monitors the `audio_queue` for incoming data.
-  - Applies a **Noise Floor Gate** to skip silence.
-  - Performs **VAD-aware chunking** to find natural speech boundaries.
-  - Generates transcriptions using `faster-whisper`.
-  - Performs **Speaker Diarization** and **Robotic Voice Detection** on-the-fly.
-  - Pushes processed results into the `broadcast_queue`.
-- **FastAPI/Uvicorn Backend (Main Thread)**:
-  - Serves the static web dashboard.
-  - Manages WebSocket connections for real-time clients.
-  - **Broadcaster Worker**: Continuously drains the `broadcast_queue` and relays results to all connected clients.
+| Component | Technology | Purpose |
+|:----------|:-----------|:--------|
+| **Audio Capture** | `sounddevice` | Captures realtime PCM audio from microphone or file |
+| **Transcription Engine** | `faster-whisper` | Converts audio to text with VAD-aware chunking |
+| **Speaker Diarization** | SpeechBrain ECAPA-TDNN | Identifies and labels different speakers |
+| **Bot Detection** | Pitch/spectral analysis | Detects synthetic TTS voices |
+| **Web Server** | FastAPI + Uvicorn | Serves static files, REST API, and WebSocket |
+| **Session Storage** | JSON files | Persists transcript text and metadata on server |
 
-### 2. WebSocket Communication
+### Frontend Components
 
-The communication between the Web UI and Backend uses a single WebSocket connection on `/ws`:
+| Component | Technology | Purpose |
+|:----------|:-----------|:--------|
+| **Transcript Feed** | Vanilla JS + DOM | Displays live transcripts with speaker labels |
+| **Audio Visualizer** | Canvas API | Real-time waveform visualization |
+| **Audio Playback** | Web Audio API | Replay individual transcript segments |
+| **Audio Storage** | IndexedDB | Browser-side audio blob storage (keyed by `origin_time`) |
+| **Settings** | localStorage | Theme, watchwords, scroll lock state |
 
-| Data Type | format | Content |
-| :--- | :--- | :--- |
-| **Transcription** | JSON | The text, speaker label, timestamp, and performance telemetry. |
-| **Audio Stream** | Binary | Raw `Float32Array` chunks sent at 16,000Hz for live visualization and history playback. |
+### Data Flow
 
-### 3. Frontend Implementation
+1. **Audio Capture Thread** → Captures PCM audio, pushes to `audio_queue`
+2. **Transcription Thread** → Processes audio, generates text, pushes to `broadcast_queue`
+3. **WebSocket Broadcaster** → Relays transcripts + raw audio to connected clients
+4. **Frontend** → Renders transcripts, stores audio for playback, syncs with server session
 
-- **Web Audio API**: Used to manage the live audio stream, synchronize playback of history segments, and handle volume normalization.
-- **Canvas API**: Provides the high-frequency volume visualizer reacting to the binary audio stream.
-- **LocalStorage**: Persists your theme settings, watchwords, and recent transcription history (text-only) across page refreshes.
+### WebSocket Protocol (`/ws`)
+
+| Direction | Type | Content |
+|:----------|:-----|:--------|
+| Server → Client | JSON | Transcript: `{type, timestamp, origin_time, duration, speaker, text, confidence}` |
+| Server → Client | Binary | Raw `Float32Array` audio chunks (16kHz) for visualization |
 
 ## ⚙️ Custom Configuration (`config.json`)
 
