@@ -48,7 +48,8 @@ let isPlaybackMuted = false;
 let liveAudioEnabledBeforePlayback = false;
 let activePlaybackSource = null;
 let activePlaybackId = null;
-let activeSpeakerFilter = null;
+// selectedSpeakers is now defined in the Speaker Filtering section below
+let selectedSpeakers = new Set();  // Empty = show all speakers
 let watchwords = [];
 let theme = 'dark';
 let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
@@ -325,7 +326,7 @@ function createTranscriptElement(data, fromSession = false, audioData = null) {
     item.dataset.speaker = itemSpeaker;
 
     // Apply active filter if necessary
-    if (activeSpeakerFilter && itemSpeaker !== activeSpeakerFilter) {
+    if (selectedSpeakers.size > 0 && !selectedSpeakers.has(itemSpeaker)) {
         item.classList.add('filtered-out');
     }
 
@@ -424,7 +425,7 @@ function addTranscriptItem(data, fromSession = false) {
     document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
 
     // Apply active filter if necessary
-    if (activeSpeakerFilter && itemSpeaker !== activeSpeakerFilter) {
+    if (selectedSpeakers.size > 0 && !selectedSpeakers.has(itemSpeaker)) {
         item.classList.add('filtered-out');
     }
 
@@ -488,54 +489,152 @@ function drawVisualizer() {
     }
 }
 
-// Speaker Filtering
+// Speaker Filtering (Multi-select dropdown)
+
 function renderSpeakerFilters() {
     const filterContainer = document.getElementById('speaker-filters');
     if (!filterContainer) return;
 
-    // Preserve existing tags, only add new ones
-    const currentTags = Array.from(filterContainer.querySelectorAll('.tag')).map(t => t.dataset.label);
+    // Get current speakers in the list
+    const currentItems = Array.from(filterContainer.querySelectorAll('.dropdown-item')).map(
+        item => item.dataset.speaker
+    );
 
     speakers.forEach(speaker => {
-        if (!currentTags.includes(speaker)) {
-            const tag = document.createElement('div');
-            tag.className = 'tag';
-            tag.dataset.label = speaker;
-            tag.textContent = speaker;
-            tag.onclick = () => applySpeakerFilter(speaker);
-            filterContainer.appendChild(tag);
+        if (!currentItems.includes(speaker)) {
+            const item = document.createElement('label');
+            item.className = 'dropdown-item';
+            item.dataset.speaker = speaker;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = selectedSpeakers.size === 0 || selectedSpeakers.has(speaker);
+            checkbox.addEventListener('change', () => toggleSpeaker(speaker, checkbox.checked));
+
+            const label = document.createElement('span');
+            label.textContent = speaker;
+
+            item.appendChild(checkbox);
+            item.appendChild(label);
+            filterContainer.appendChild(item);
         }
     });
 }
 
-function applySpeakerFilter(label) {
-    activeSpeakerFilter = label;
+function toggleSpeaker(speaker, checked) {
+    if (checked) {
+        // If we had "show all" mode (empty set), switching to selective mode
+        if (selectedSpeakers.size === 0) {
+            // Add all speakers except this one will be unchecked scenario
+            // Actually, if checking one while in "show all", we stay in show all
+        }
+        selectedSpeakers.add(speaker);
+    } else {
+        // If currently showing all, need to switch to selective mode
+        if (selectedSpeakers.size === 0) {
+            // Populate with all except the unchecked one
+            speakers.forEach(s => {
+                if (s !== speaker) selectedSpeakers.add(s);
+            });
+        } else {
+            selectedSpeakers.delete(speaker);
+        }
+    }
+    applyMultiSpeakerFilter();
+}
 
-    // Update UI highlights
-    document.querySelectorAll('#speaker-filters .tag').forEach(tag => {
-        tag.classList.toggle('active', tag.dataset.label === label);
-    });
+function applyMultiSpeakerFilter() {
+    // Update dropdown label
+    const label = document.getElementById('speaker-filter-label');
+    if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
+        label.textContent = 'All Speakers';
+    } else if (selectedSpeakers.size === 1) {
+        label.textContent = [...selectedSpeakers][0];
+    } else {
+        label.textContent = `${selectedSpeakers.size} speakers selected`;
+    }
 
     // Filter feed
     document.querySelectorAll('.transcript-item').forEach(item => {
         const itemSpeaker = item.dataset.speaker || 'Unknown';
 
-        if (!label || itemSpeaker === label) {
+        // Show all if no filter, or if speaker is selected
+        if (selectedSpeakers.size === 0 || selectedSpeakers.has(itemSpeaker)) {
             item.classList.remove('filtered-out');
         } else {
             item.classList.add('filtered-out');
         }
     });
 
-    console.log(`Speaker filter applied: ${label || 'Show All'}`);
-
-    // Smooth scroll to bottom after layout change (respect scroll lock)
+    // Scroll if not locked
     if (!isScrollLocked) {
         transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
     }
 }
 
-document.getElementById('reset-filters').addEventListener('click', () => applySpeakerFilter(null));
+// Dropdown toggle
+document.getElementById('speaker-dropdown-toggle').addEventListener('click', () => {
+    const menu = document.getElementById('speaker-dropdown-menu');
+    const toggle = document.getElementById('speaker-dropdown-toggle');
+    menu.classList.toggle('hidden');
+    toggle.classList.toggle('open');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const dropdown = document.querySelector('.speaker-dropdown');
+    if (!dropdown.contains(e.target)) {
+        document.getElementById('speaker-dropdown-menu').classList.add('hidden');
+        document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+    }
+});
+
+// Search functionality
+document.getElementById('speaker-search').addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase();
+    document.querySelectorAll('#speaker-filters .dropdown-item').forEach(item => {
+        const speaker = item.dataset.speaker.toLowerCase();
+        item.classList.toggle('hidden', !speaker.includes(query));
+    });
+});
+
+// Select All
+document.getElementById('select-all-speakers').addEventListener('click', () => {
+    selectedSpeakers.clear();  // Empty = show all
+    document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+    });
+    applyMultiSpeakerFilter();
+});
+
+// Deselect All
+document.getElementById('deselect-all-speakers').addEventListener('click', () => {
+    selectedSpeakers.clear();
+    speakers.forEach(s => selectedSpeakers.add(s));  // Will then remove all
+    selectedSpeakers.clear();
+    // Actually just hide everything
+    document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+    // Set to explicit empty selection (hide all)
+    speakers.forEach(s => { }); // noop - keep selectedSpeakers as we want
+    // Force hide all by creating a dummy set that matches nothing
+    selectedSpeakers = new Set(['__NONE__']);
+    applyMultiSpeakerFilter();
+});
+
+// Reset/Clear button
+document.getElementById('reset-filters').addEventListener('click', () => {
+    selectedSpeakers.clear();
+    document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+    });
+    document.getElementById('speaker-search').value = '';
+    document.querySelectorAll('#speaker-filters .dropdown-item').forEach(item => {
+        item.classList.remove('hidden');
+    });
+    applyMultiSpeakerFilter();
+});
 
 function downloadSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);

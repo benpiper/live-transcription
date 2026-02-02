@@ -92,10 +92,24 @@
                 <section class="speaker-filter-section">
                     <div class="section-header">
                         <h3>Speaker Filters</h3>
-                        <button id="reset-filters" class="btn-text">Show All</button>
+                        <button id="reset-filters" class="btn-text">Clear</button>
                     </div>
-                    <div id="speaker-filters" class="tag-list">
-                        <!-- Speaker filter chips will appear here -->
+                    <div class="speaker-dropdown">
+                        <button id="speaker-dropdown-toggle" class="dropdown-toggle">
+                            <span id="speaker-filter-label">All Speakers</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+                        <div id="speaker-dropdown-menu" class="dropdown-menu hidden">
+                            <input type="text" id="speaker-search" class="dropdown-search"
+                                placeholder="Search speakers...">
+                            <div class="dropdown-actions">
+                                <button id="select-all-speakers" class="btn-text">Select All</button>
+                                <button id="deselect-all-speakers" class="btn-text">Deselect All</button>
+                            </div>
+                            <div id="speaker-filters" class="dropdown-list">
+                                <!-- Speaker checkboxes will appear here -->
+                            </div>
+                        </div>
                     </div>
                 </section>
 
