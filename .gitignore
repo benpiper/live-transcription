@@ -12,3 +12,5 @@ env/
 *.wav
 *.txt
 sessions/
+pretrained_models/
+voice_profiles/
