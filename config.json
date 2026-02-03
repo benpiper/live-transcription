@@ -79,7 +79,7 @@
         "beam_size": 9,
         "min_silence_duration_ms": 200,
         "avg_logprob_cutoff": -0.8,
-        "no_speech_prob_cutoff": 0.15,
+        "no_speech_prob_cutoff": 0.2,
         "extreme_confidence_cutoff": -0.4,
         "min_window_sec": 0.5,
         "max_window_sec": 17.5,
