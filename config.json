@@ -60,7 +60,9 @@
         "Triage",
         "MUSC",
         "Trident",
-        "fall"
+        "fall",
+        "publix",
+        "nexton"
     ],
     "corrections": {
         "EMSOX": "EMS ops",
@@ -74,7 +76,7 @@
         "no_speech_threshold": 0.6,
         "log_prob_threshold": -1.0,
         "compression_ratio_threshold": 2.0,
-        "beam_size": 8,
+        "beam_size": 9,
         "min_silence_duration_ms": 200,
         "avg_logprob_cutoff": -0.8,
         "no_speech_prob_cutoff": 0.15,

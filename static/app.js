@@ -152,6 +152,9 @@ async function loadCurrentSession() {
             // Scroll to bottom
             transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
 
+            // Update watchword navigation if there are matches
+            updateMatchCounter();
+
             console.log(`Loaded ${data.transcripts.length} transcripts from session`);
         }
     } catch (err) {
@@ -320,6 +323,8 @@ function createTranscriptElement(data, fromSession = false, audioData = null) {
     if (checkWatchwords(data.text)) {
         item.classList.add('highlight');
         if (!fromSession) triggerNotification(data.text);
+        // Update nav after DOM append (deferred)
+        setTimeout(() => updateMatchCounter(), 0);
     }
 
     const itemSpeaker = data.speaker || 'Unknown';
@@ -366,6 +371,8 @@ function addTranscriptItem(data, fromSession = false) {
     if (checkWatchwords(data.text)) {
         item.classList.add('highlight');
         if (!fromSession) triggerNotification(data.text);  // Don't notify for old items
+        // Update nav after DOM append (deferred)
+        setTimeout(() => updateMatchCounter(), 0);
     }
 
     // Calculate true latency and extract segment audio (skip for session-loaded items)
@@ -921,8 +928,135 @@ function reApplyWatchwordHighlights() {
             item.classList.remove('highlight');
         }
     });
+
+    // Update navigation controls
+    updateMatchCounter();
 }
 
+
+// Watchword Navigation State
+let currentMatchIndex = 0;
+let showOnlyMatches = false;
+
+function getMatchedItems() {
+    return Array.from(document.querySelectorAll('.transcript-item.highlight'));
+}
+
+function updateMatchCounter() {
+    const matches = getMatchedItems();
+    const counter = document.getElementById('match-counter');
+    const nav = document.getElementById('watchword-nav');
+    const timeline = document.getElementById('match-timeline');
+
+    if (matches.length === 0) {
+        nav.classList.add('hidden');
+        timeline.classList.add('hidden');
+        return;
+    }
+
+    nav.classList.remove('hidden');
+    timeline.classList.remove('hidden');
+
+    // Clamp index
+    if (currentMatchIndex >= matches.length) currentMatchIndex = matches.length - 1;
+    if (currentMatchIndex < 0) currentMatchIndex = 0;
+
+    counter.textContent = `${currentMatchIndex + 1}/${matches.length}`;
+
+    // Update button states
+    document.getElementById('prev-match').disabled = currentMatchIndex === 0;
+    document.getElementById('next-match').disabled = currentMatchIndex >= matches.length - 1;
+
+    // Update timeline
+    updateMatchTimeline(matches);
+}
+
+function updateMatchTimeline(matches) {
+    const timeline = document.getElementById('match-timeline');
+    const feed = document.getElementById('transcript-feed');
+
+    timeline.innerHTML = '';
+
+    if (matches.length === 0 || feed.scrollHeight === 0) return;
+
+    const allItems = Array.from(document.querySelectorAll('.transcript-item'));
+    const feedScrollHeight = feed.scrollHeight;
+
+    matches.forEach((item, index) => {
+        const itemTop = item.offsetTop;
+        const position = (itemTop / feedScrollHeight) * 100;
+
+        // Get timestamp from the transcript item
+        const timestampEl = item.querySelector('.timestamp');
+        const timestamp = timestampEl ? timestampEl.textContent : `Match ${index + 1}`;
+
+        const marker = document.createElement('div');
+        marker.className = 'timeline-marker' + (index === currentMatchIndex ? ' current' : '');
+        marker.style.left = `${Math.min(position, 98)}%`;
+        marker.title = timestamp;
+        marker.addEventListener('click', () => jumpToMatch(index));
+        timeline.appendChild(marker);
+    });
+}
+
+function jumpToMatch(index) {
+    const matches = getMatchedItems();
+    if (index < 0 || index >= matches.length) return;
+
+    currentMatchIndex = index;
+    const target = matches[index];
+
+    // Scroll into view with offset
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Brief highlight pulse
+    target.style.transition = 'box-shadow 0.2s';
+    target.style.boxShadow = '0 0 0 3px var(--primary)';
+    setTimeout(() => {
+        target.style.boxShadow = '';
+    }, 1000);
+
+    updateMatchCounter();
+}
+
+function prevMatch() {
+    if (currentMatchIndex > 0) {
+        jumpToMatch(currentMatchIndex - 1);
+    }
+}
+
+function nextMatch() {
+    const matches = getMatchedItems();
+    if (currentMatchIndex < matches.length - 1) {
+        jumpToMatch(currentMatchIndex + 1);
+    }
+}
+
+function toggleMatchFilter() {
+    showOnlyMatches = !showOnlyMatches;
+    const btn = document.getElementById('filter-matches');
+    const icon = document.getElementById('filter-icon');
+
+    if (showOnlyMatches) {
+        btn.classList.add('active');
+        btn.innerHTML = '<span id="filter-icon">👁</span> Matches';
+        // Hide non-matching items
+        document.querySelectorAll('.transcript-item').forEach(item => {
+            if (!item.classList.contains('highlight')) {
+                item.classList.add('match-filtered');
+            }
+        });
+    } else {
+        btn.classList.remove('active');
+        btn.innerHTML = '<span id="filter-icon">👁</span> All';
+        // Show all items
+        document.querySelectorAll('.transcript-item.match-filtered').forEach(item => {
+            item.classList.remove('match-filtered');
+        });
+    }
+
+    updateMatchTimeline(getMatchedItems());
+}
 
 // Event Listeners for Watchwords
 document.getElementById('add-watchword').addEventListener('click', addWatchword);
@@ -930,6 +1064,11 @@ document.getElementById('watchword-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addWatchword();
 });
 document.getElementById('clear-watchwords').addEventListener('click', clearWatchwords);
+
+// Event Listeners for Navigation
+document.getElementById('prev-match').addEventListener('click', prevMatch);
+document.getElementById('next-match').addEventListener('click', nextMatch);
+document.getElementById('filter-matches').addEventListener('click', toggleMatchFilter);
 
 // Notification Management
 const notificationBtn = document.getElementById('enable-notifications');
