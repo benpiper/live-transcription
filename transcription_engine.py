@@ -197,17 +197,19 @@ def transcribe_chunk(
     
     vocabulary = get_vocabulary()
     if vocabulary:
-        prompt_parts.append(", ".join(vocabulary))
+        # Use a context preamble to reduce biasing weight
+        prompt_parts.append(f"Context and technical terms that might be mentioned: {', '.join(vocabulary)}")
     
-    # Add previous transcript for continuity
+    # Add previous transcript for continuity (keep it short)
     last_text = getattr(transcribe_chunk, "last_transcript", None)
     if last_text:
-        prompt_parts.append(last_text[-200:])
+        prompt_parts.append(f"Previously said: {last_text[-150:]}")
     
-    initial_prompt = " | ".join(prompt_parts) if prompt_parts else None
+    initial_prompt = ". ".join(prompt_parts) if prompt_parts else None
 
     # Debug: Log the prompt being sent to Whisper
-    logger.debug(f"Whisper prompt ({len(initial_prompt) if initial_prompt else 0} chars): {initial_prompt}")
+    if initial_prompt:
+        logger.debug(f"Whisper prompt ({len(initial_prompt)} chars): {initial_prompt}")
     
     # Transcribe
     try:
@@ -271,6 +273,19 @@ def transcribe_chunk(
             continue
         elif segment.no_speech_prob > no_speech_prob_cutoff:
             continue
+            
+        # Enhanced Confidence Filtering: Reject vocab-heavy segments with marginal confidence
+        if vocabulary:
+            vocab_lower = [v.lower() for v in vocabulary]
+            words = text_segment.lower().split()
+            vocab_hits = [w for w in words if any(v in w for v in vocab_lower)]
+            
+            # If segment is >50% vocabulary words, require even higher confidence
+            if len(words) > 0 and (len(vocab_hits) / len(words)) > 0.5:
+                strict_cutoff = avg_logprob_cutoff + 0.2
+                if segment.avg_logprob < strict_cutoff:
+                    logger.debug(f"Rejecting vocab-heavy segment (conf {segment.avg_logprob:.2f} < {strict_cutoff:.2f}): {text_segment}")
+                    continue
         
         # Speaker identification (via profiles or dynamic clustering)
         seg_speaker_label = "Speaker"  # Default label
