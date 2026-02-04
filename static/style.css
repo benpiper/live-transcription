@@ -451,6 +451,36 @@ canvas {
     margin-bottom: 12px;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-icon-small {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.8rem;
+}
+
+.btn-icon-small:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+}
+
+#watchword-content.collapsed {
+    display: none;
+}
+
 .watchword-nav {
     display: flex;
     justify-content: space-between;
@@ -692,6 +722,18 @@ canvas {
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+    max-height: 120px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.tag-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.tag-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 2px;
 }
 
 .tag {
@@ -731,16 +773,9 @@ canvas {
     color: var(--danger);
 }
 
-.tag-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-}
-
 .tag {
     background: var(--primary);
-    color: white;
+    color: #0f172a;
     padding: 4px 10px;
     border-radius: 20px;
     font-size: 0.75rem;
@@ -748,6 +783,7 @@ canvas {
     align-items: center;
     gap: 6px;
     animation: slideIn 0.3s ease-out;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .tag .remove {

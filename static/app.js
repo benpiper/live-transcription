@@ -1177,6 +1177,34 @@ document.querySelector('.feed-section').addEventListener('click', () => {
     }
 });
 
+// Watchword Collapse Toggle
+const watchwordCollapseToggle = document.getElementById('watchword-collapse-toggle');
+const watchwordCollapseIcon = document.getElementById('watchword-collapse-icon');
+const watchwordContent = document.getElementById('watchword-content');
+
+let isWatchwordsCollapsed = localStorage.getItem('watchwords-collapsed') === 'true';
+
+function updateWatchwordCollapseUI() {
+    if (isWatchwordsCollapsed) {
+        watchwordContent.classList.add('collapsed');
+        watchwordCollapseIcon.textContent = '+';
+    } else {
+        watchwordContent.classList.remove('collapsed');
+        watchwordCollapseIcon.textContent = '−';
+    }
+}
+
+if (watchwordCollapseToggle) {
+    watchwordCollapseToggle.addEventListener('click', () => {
+        isWatchwordsCollapsed = !isWatchwordsCollapsed;
+        localStorage.setItem('watchwords-collapsed', isWatchwordsCollapsed);
+        updateWatchwordCollapseUI();
+    });
+}
+
+// Initial state
+updateWatchwordCollapseUI();
+
 // History Clearing
 function clearFullHistory() {
     if (!confirm("Are you sure you want to clear ALL transcription history and audio clips?")) return;

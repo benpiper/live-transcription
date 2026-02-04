@@ -75,31 +75,38 @@
                 <section class="watchword-section">
                     <div class="section-header">
                         <h3>Watchwords</h3>
-                        <button id="clear-watchwords" class="btn-text">Clear All</button>
-                    </div>
-                    <div class="input-group">
-                        <input type="text" id="watchword-input" placeholder="Add word or phrase...">
-                        <button id="add-watchword" class="btn-add">+</button>
-                    </div>
-                    <div id="watchwords-list" class="tag-list">
-                        <!-- Watchword tags will appear here -->
-                    </div>
-                    <div id="watchword-nav" class="watchword-nav hidden">
-                        <div class="nav-controls">
-                            <button id="prev-match" class="btn-nav" title="Previous match">◀</button>
-                            <span id="match-counter" class="match-counter">0/0</span>
-                            <button id="next-match" class="btn-nav" title="Next match">▶</button>
+                        <div class="header-actions">
+                            <button id="clear-watchwords" class="btn-text">Clear All</button>
+                            <button id="watchword-collapse-toggle" class="btn-icon-small" title="Collapse/Expand">
+                                <span id="watchword-collapse-icon">−</span>
+                            </button>
                         </div>
-                        <button id="filter-matches" class="btn-filter" title="Show only matches">
-                            <span id="filter-icon">👁</span> All
+                    </div>
+                    <div id="watchword-content">
+                        <div class="input-group">
+                            <input type="text" id="watchword-input" placeholder="Add word or phrase...">
+                            <button id="add-watchword" class="btn-add">+</button>
+                        </div>
+                        <div id="watchwords-list" class="tag-list">
+                            <!-- Watchword tags will appear here -->
+                        </div>
+                        <div id="watchword-nav" class="watchword-nav hidden">
+                            <div class="nav-controls">
+                                <button id="prev-match" class="btn-nav" title="Previous match">◀</button>
+                                <span id="match-counter" class="match-counter">0/0</span>
+                                <button id="next-match" class="btn-nav" title="Next match">▶</button>
+                            </div>
+                            <button id="filter-matches" class="btn-filter" title="Show only matches">
+                                <span id="filter-icon">👁</span> All
+                            </button>
+                        </div>
+                        <div id="match-timeline" class="match-timeline hidden">
+                            <!-- Timeline markers will appear here -->
+                        </div>
+                        <button id="enable-notifications" class="btn-secondary full-width" style="margin-top: 12px;">
+                            🔔 Enable Desktop Alerts
                         </button>
                     </div>
-                    <div id="match-timeline" class="match-timeline hidden">
-                        <!-- Timeline markers will appear here -->
-                    </div>
-                    <button id="enable-notifications" class="btn-secondary full-width" style="margin-top: 12px;">
-                        🔔 Enable Desktop Alerts
-                    </button>
                 </section>
 
                 <section class="speaker-filter-section">
