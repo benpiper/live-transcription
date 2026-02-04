@@ -63,6 +63,11 @@ current_volume = 0.0
 # Speaker model (loaded optionally)
 speaker_model = None
 
+# Silence monitoring
+last_transcript_time = None
+silence_warning_shown = False
+SILENCE_WARNING_THRESHOLD = 30 * 60  # 30 minutes in seconds
+
 
 def audio_callback(indata, frames, time_info, status):
     """Callback function to capture audio data from the microphone."""
@@ -133,6 +138,11 @@ def transcribe_audio_loop():
     start_time = None
     chunk_count = 0
     
+    # Initialize silence monitor start time
+    global last_transcript_time, silence_warning_shown
+    last_transcript_time = time.time()
+    silence_warning_shown = False
+    
     while not stop_event.is_set():
         try:
             # Check for backlog - configurable behavior
@@ -145,6 +155,14 @@ def transcribe_audio_loop():
                 continue
             elif q_size > 50:  # Warn but don't drop
                 print(f"\r[WARNING] Queue is {q_size} chunks deep - transcription is behind")
+            
+            # Check for extended silence
+            if last_transcript_time is not None:
+                silence_duration = time.time() - last_transcript_time
+                if silence_duration > SILENCE_WARNING_THRESHOLD and not silence_warning_shown:
+                    mins = int(silence_duration // 60)
+                    print(f"\n[WARNING] No transcripts for {mins} minutes - check audio source!")
+                    silence_warning_shown = True
             
             timestamp, new_chunk = audio_queue.get(timeout=0.2)
         except queue.Empty:
@@ -225,6 +243,12 @@ def transcribe_audio_loop():
 
 def output_transcription(merged_segments, start_time, audio_flat):
     """Callback to handle transcription output."""
+    global last_transcript_time, silence_warning_shown
+    
+    # Reset silence tracking
+    last_transcript_time = time.time()
+    silence_warning_shown = False
+    
     display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
     
     for m in merged_segments:

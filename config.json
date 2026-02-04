@@ -84,8 +84,8 @@
         "min_window_sec": 0.5,
         "max_window_sec": 17.5,
         "noise_floor": 0.008,
-        "diarization_threshold": 0.40,
-        "min_speaker_samples": 32000,
+        "diarization_threshold": 0.32,
+        "min_speaker_samples": 48000,
         "voice_profiles_dir": "voice_profiles",
         "voice_match_threshold": 0.7
     }
