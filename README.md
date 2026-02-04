@@ -233,6 +233,28 @@ python3 enroll_voice.py delete --name "Dispatcher A"
 
 Profiles are stored as JSON files in the `voice_profiles/` directory. Each profile contains an averaged voice embedding extracted from the sample audio files.
 
+## 📧 Email Alert Tool
+
+A separate utility is provided to monitor transcripts and send email alerts when specific keywords are found.
+
+### Setup
+
+1. **Configure SMTP**: Copy `email_config.json.example` to `email_config.json` and fill in your settings.
+   ```bash
+   cp email_config.json.example email_config.json
+   ```
+2. **Run the Alert Tool**:
+   ```bash
+   python3 email_alert.py
+   ```
+
+3. **Test your configuration**:
+   ```bash
+   python3 email_alert.py --test
+   ```
+
+The tool connects to the live feed via WebSocket and applies a configurable rate limit (default 5 minutes) per keyword to avoid alert fatigue.
+
 ## 📜 License
 
 [MIT License](LICENSE)
