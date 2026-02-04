@@ -76,7 +76,7 @@
         "no_speech_threshold": 0.7,
         "log_prob_threshold": -1.0,
         "compression_ratio_threshold": 2.2,
-        "beam_size": 5,
+        "beam_size": 7,
         "min_silence_duration_ms": 200,
         "avg_logprob_cutoff": -0.7,
         "no_speech_prob_cutoff": 0.25,
