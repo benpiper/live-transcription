@@ -11,7 +11,9 @@
     "alerts": {
         "keywords": ["fire", "emergency", "ambulance", "shooting", "police"],
         "rate_limit_seconds": 300,
-        "subject_prefix": "[Transcription Alert]"
+        "subject_prefix": "[Transcription Alert]",
+        "context_count": 3,
+        "attach_audio": true
     },
     "websocket": {
         "url": "ws://localhost:8000/ws"
