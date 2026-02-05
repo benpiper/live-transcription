@@ -122,11 +122,11 @@ class EmailAlertTool:
         Triggering Line:
         [{timestamp}] {speaker}: {text}
         
-        Context (Previous {len(context_lines)} lines):
+        Context:
         {context_text}
         
         ---
-        This is an automated alert from the Live Transcription System.
+        This is an automated alert.
         """
 
         msg = MIMEMultipart()
