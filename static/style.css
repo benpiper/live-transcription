@@ -158,7 +158,7 @@ main {
 }
 
 .transcript-item {
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     animation: slideIn 0.3s ease-out;
 }
 
@@ -315,6 +315,13 @@ main {
     font-weight: 600;
     font-size: 0.85rem;
     color: var(--accent);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.speaker:hover {
+    color: var(--primary);
+    text-decoration: underline;
 }
 
 .speaker.robotic {

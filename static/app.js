@@ -347,7 +347,9 @@ function createTranscriptElement(data, fromSession = false, audioData = null) {
 
     item.innerHTML = `
         <div class="transcript-header">
-            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
+            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}" 
+                  onclick="filterBySpeaker('${itemSpeaker}')" 
+                  title="Click to filter by this speaker">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
@@ -441,7 +443,9 @@ function addTranscriptItem(data, fromSession = false) {
 
     item.innerHTML = `
         <div class="transcript-header">
-            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}">${data.speaker || 'Unknown'}</span>
+            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}"
+                  onclick="filterBySpeaker('${itemSpeaker}')"
+                  title="Click to filter by this speaker">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
@@ -597,6 +601,21 @@ function applyMultiSpeakerFilter() {
     if (!isScrollLocked) {
         transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
     }
+}
+
+function filterBySpeaker(speaker) {
+    // If clicking a speaker, we want to show ONLY that speaker.
+    // Reset selection and add this speaker.
+    selectedSpeakers.clear();
+    selectedSpeakers.add(speaker);
+
+    // Update the checkbox UI
+    document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
+        const item = cb.closest('.dropdown-item');
+        cb.checked = (item && item.dataset.speaker === speaker);
+    });
+
+    applyMultiSpeakerFilter();
 }
 
 // Dropdown toggle
