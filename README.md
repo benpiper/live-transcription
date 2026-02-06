@@ -5,7 +5,7 @@ A high-performance, real-time audio transcription tool using the `faster-whisper
 ## ✨ Features
 
 - **Real-time Transcription**: Transcribes audio as you speak with minimal latency.
-- **Web Dashboard**: A modern, glassmorphic web interface to monitor transcription feeds, audio volume, and performance telemetry (Latency, Buffer).
+- **Optimized Web Dashboard**: A modern interface designed for long-running sessions, using efficient DOM management to remain responsive even with thousands of transcription entries.
 - **Speaker Identification (Diarization)**: Automatically identifies and labels different speakers (e.g., `[Speaker 1]`) using ECAPA-TDNN voice embeddings.
 - **Voice Profiles**: Pre-register known speakers (dispatchers, IVR systems, key personnel) for instant identification by name.
 - **Advanced Timestamps**: All outputs include full date/time stamps (e.g., `[2026-01-25 23:46:16]`) for accurate logging.
