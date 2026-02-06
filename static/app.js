@@ -48,6 +48,8 @@ let isPlaybackMuted = false;
 let liveAudioEnabledBeforePlayback = false;
 let activePlaybackSource = null;
 let activePlaybackId = null;
+let speakerFilterTimeout = null;
+let speakerCountTimeout = null;
 // selectedSpeakers is now defined in the Speaker Filtering section below
 let selectedSpeakers = new Set();  // Empty = show all speakers
 let watchwords = [];
@@ -119,22 +121,24 @@ async function loadCurrentSession() {
                     audioData = await getAudioFromDB(audioKey);
                 }
 
-                // Add to transcriptionHistory for playback
+                // Add to transcriptionHistory
                 const historyItem = {
-                    id: t.origin_time ? `audio-${t.origin_time}` : null,
+                    id: t.origin_time ? `audio-${t.origin_time}` : `temp-${Date.now()}-${Math.random()}`,
                     speaker: t.speaker,
                     text: t.text,
                     audio: audioData,
                     timestamp: t.timestamp,
                     origin_time: t.origin_time,
                     duration: t.duration,
-                    confidence: t.confidence
+                    confidence: t.confidence,
+                    el: null
                 };
-                if (audioData) {
-                    transcriptionHistory.push(historyItem);
-                }
 
                 const element = createTranscriptElement(t, true, audioData);  // Pass audio data
+                historyItem.el = element;
+                element.dataset.historyId = historyItem.id; // Internal link
+                transcriptionHistory.push(historyItem);
+
                 fragment.appendChild(element);
 
                 // Track speakers
@@ -147,7 +151,7 @@ async function loadCurrentSession() {
 
             // Render speaker filters once after all items loaded
             renderSpeakerFilters();
-            document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
+            updateSpeakerCountUI();
 
             // Scroll to bottom
             transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
@@ -367,31 +371,39 @@ function addTranscriptItem(data, fromSession = false) {
     const item = document.createElement('div');
     item.className = 'transcript-item';
 
+    // Global history item
+    const historyItem = {
+        id: data.origin_time ? `audio-${data.origin_time}` : `live-${Date.now()}`,
+        speaker: data.speaker,
+        text: data.text,
+        audio: null,
+        timestamp: data.timestamp,
+        origin_time: data.origin_time,
+        duration: data.duration,
+        confidence: data.confidence,
+        el: item
+    };
+    item.dataset.historyId = historyItem.id;
+
     // Check for watchwords
     if (checkWatchwords(data.text)) {
         item.classList.add('highlight');
-        if (!fromSession) triggerNotification(data.text);  // Don't notify for old items
-        // Update nav after DOM append (deferred)
+        if (!fromSession) triggerNotification(data.text);
         setTimeout(() => updateMatchCounter(), 0);
     }
 
-    // Calculate true latency and extract segment audio (skip for session-loaded items)
+    // Process audio if present
     if (data.origin_time && !fromSession) {
         const latency = (Date.now() / 1000) - data.origin_time;
         latencyStat.textContent = `${(latency * 1000).toFixed(0)}ms`;
 
-        // Extract related audio from history with proper boundaries
-        // Start: origin_time - 0.5s (small lead-in)
-        // End: current time (when transcript arrived)
         const segmentStart = data.origin_time - 0.5;
-        const segmentEnd = Date.now() / 1000;  // Current time as end boundary
-
+        const segmentEnd = Date.now() / 1000;
         const segmentChunks = rawAudioHistory
-            .filter(item => item.timestamp >= segmentStart && item.timestamp <= segmentEnd)
-            .map(item => item.chunk);
+            .filter(ah => ah.timestamp >= segmentStart && ah.timestamp <= segmentEnd)
+            .map(ah => ah.chunk);
 
         if (segmentChunks.length > 0) {
-            // Concatenate
             const totalLength = segmentChunks.reduce((acc, chunk) => acc + chunk.length, 0);
             const combinedAudio = new Float32Array(totalLength);
             let offset = 0;
@@ -399,37 +411,22 @@ function addTranscriptItem(data, fromSession = false) {
                 combinedAudio.set(chunk, offset);
                 offset += chunk.length;
             }
+            historyItem.audio = combinedAudio;
+            item.dataset.id = historyItem.id;
 
-            // Use origin_time as key for audio matching
-            const itemId = `audio-${data.origin_time}`;
-            const historyItem = {
-                id: itemId,
-                speaker: data.speaker,
-                text: data.text,
-                audio: combinedAudio,
-                timestamp: data.timestamp,
-                origin_time: data.origin_time,
-                duration: data.duration,
-                confidence: data.confidence
-            };
-
-            transcriptionHistory.push(historyItem);
-
-            // Add ID for playback lookup
-            item.dataset.id = itemId;
-
-            saveAudioToDB(itemId, combinedAudio);
+            saveAudioToDB(historyItem.id, combinedAudio);
             pruneHistory();
-        } else {
-            console.warn(`No audio chunks found for segment ${segmentStart.toFixed(2)} - ${segmentEnd.toFixed(2)}. Buffer range: ${rawAudioHistory.length > 0 ? rawAudioHistory[0].timestamp.toFixed(2) : 'empty'} to ${rawAudioHistory.length > 0 ? rawAudioHistory[rawAudioHistory.length - 1].timestamp.toFixed(2) : 'empty'}`);
         }
     }
 
     const itemSpeaker = data.speaker || 'Unknown';
     item.dataset.speaker = itemSpeaker;
-    speakers.add(itemSpeaker);
-    renderSpeakerFilters();
-    document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
+
+    if (!speakers.has(itemSpeaker)) {
+        speakers.add(itemSpeaker);
+        throttledRenderSpeakerFilters();
+        throttledUpdateSpeakerCount();
+    }
 
     // Apply active filter if necessary
     if (selectedSpeakers.size > 0 && !selectedSpeakers.has(itemSpeaker)) {
@@ -457,10 +454,32 @@ function addTranscriptItem(data, fromSession = false) {
         <div class="transcript-text">${highlightWatchwords(data.text)}</div>
     `;
 
+    transcriptionHistory.push(historyItem);
     transcriptFeed.appendChild(item);
+
     if (!isScrollLocked) {
         transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
     }
+}
+
+function updateSpeakerCountUI() {
+    document.getElementById('speaker-count').textContent = `${speakers.size} Speakers Detected`;
+}
+
+function throttledRenderSpeakerFilters() {
+    if (speakerFilterTimeout) return;
+    speakerFilterTimeout = setTimeout(() => {
+        renderSpeakerFilters();
+        speakerFilterTimeout = null;
+    }, 1000);
+}
+
+function throttledUpdateSpeakerCount() {
+    if (speakerCountTimeout) return;
+    speakerCountTimeout = setTimeout(() => {
+        updateSpeakerCountUI();
+        speakerCountTimeout = null;
+    }, 2000);
 }
 
 function drawVisualizer() {
@@ -561,15 +580,16 @@ function applyMultiSpeakerFilter() {
         label.textContent = `${selectedSpeakers.size} speakers selected`;
     }
 
-    // Filter feed
-    document.querySelectorAll('.transcript-item').forEach(item => {
-        const itemSpeaker = item.dataset.speaker || 'Unknown';
+    // Filter feed using cached references
+    transcriptionHistory.forEach(item => {
+        if (!item.el) return;
+        const itemSpeaker = item.speaker || 'Unknown';
 
         // Show all if no filter, or if speaker is selected
         if (selectedSpeakers.size === 0 || selectedSpeakers.has(itemSpeaker)) {
-            item.classList.remove('filtered-out');
+            item.el.classList.remove('filtered-out');
         } else {
-            item.classList.add('filtered-out');
+            item.el.classList.add('filtered-out');
         }
     });
 
@@ -814,13 +834,15 @@ function pruneHistory() {
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
-        // Delete audio from IndexedDB
-        deleteAudioFromDB(removed.id);
 
-        // UI Clean up
-        const segmentEl = document.querySelector(`[data-id="${removed.id}"]`);
-        if (segmentEl) {
-            segmentEl.remove();
+        // Delete audio from IndexedDB if it has a proper ID
+        if (removed.id && !removed.id.startsWith('temp-') && !removed.id.startsWith('live-')) {
+            deleteAudioFromDB(removed.id);
+        }
+
+        // UI Clean up using cached reference
+        if (removed.el) {
+            removed.el.remove();
         }
     }
 }
@@ -909,23 +931,23 @@ function clearWatchwords() {
 }
 
 function reApplyWatchwordHighlights() {
-    // Re-evaluate all displayed transcript items for watchword matches
-    const items = document.querySelectorAll('.transcript-item');
-    items.forEach(item => {
-        const textEl = item.querySelector('.transcript-text');
+    // Re-evaluate all displayed transcript items using cached references
+    transcriptionHistory.forEach(item => {
+        if (!item.el) return;
+        const textEl = item.el.querySelector('.transcript-text');
         if (!textEl) return;
 
-        // Get plain text (strip any existing highlights)
-        const text = textEl.textContent || '';
+        // Get plain text
+        const text = item.text || textEl.textContent || '';
 
         // Re-apply inline highlights
         textEl.innerHTML = highlightWatchwords(text);
 
         // Toggle item highlight class
         if (checkWatchwords(text)) {
-            item.classList.add('highlight');
+            item.el.classList.add('highlight');
         } else {
-            item.classList.remove('highlight');
+            item.el.classList.remove('highlight');
         }
     });
 
@@ -939,7 +961,7 @@ let currentMatchIndex = 0;
 let showOnlyMatches = false;
 
 function getMatchedItems() {
-    return Array.from(document.querySelectorAll('.transcript-item.highlight'));
+    return transcriptionHistory.filter(item => item.el && item.el.classList.contains('highlight')).map(item => item.el);
 }
 
 function updateMatchCounter() {
@@ -979,14 +1001,13 @@ function updateMatchTimeline(matches) {
 
     if (matches.length === 0 || feed.scrollHeight === 0) return;
 
-    const allItems = Array.from(document.querySelectorAll('.transcript-item'));
     const feedScrollHeight = feed.scrollHeight;
 
     matches.forEach((item, index) => {
         const itemTop = item.offsetTop;
         const position = (itemTop / feedScrollHeight) * 100;
 
-        // Get timestamp from the transcript item
+        // Get timestamp from the transcript item (already in element)
         const timestampEl = item.querySelector('.timestamp');
         const timestamp = timestampEl ? timestampEl.textContent : `Match ${index + 1}`;
 
@@ -1040,18 +1061,20 @@ function toggleMatchFilter() {
     if (showOnlyMatches) {
         btn.classList.add('active');
         btn.innerHTML = '<span id="filter-icon">👁</span> Matches';
-        // Hide non-matching items
-        document.querySelectorAll('.transcript-item').forEach(item => {
-            if (!item.classList.contains('highlight')) {
-                item.classList.add('match-filtered');
+        // Hide non-matching items using cached references
+        transcriptionHistory.forEach(item => {
+            if (item.el && !item.el.classList.contains('highlight')) {
+                item.el.classList.add('match-filtered');
             }
         });
     } else {
         btn.classList.remove('active');
         btn.innerHTML = '<span id="filter-icon">👁</span> All';
-        // Show all items
-        document.querySelectorAll('.transcript-item.match-filtered').forEach(item => {
-            item.classList.remove('match-filtered');
+        // Show all items using cached references
+        transcriptionHistory.forEach(item => {
+            if (item.el && item.el.classList.contains('match-filtered')) {
+                item.el.classList.remove('match-filtered');
+            }
         });
     }
 
@@ -1212,10 +1235,19 @@ function clearFullHistory() {
     // Clear variables
     transcriptionHistory = [];
     speakers.clear();
+    if (speakerFilterTimeout) clearTimeout(speakerFilterTimeout);
+    if (speakerCountTimeout) clearTimeout(speakerCountTimeout);
+    speakerFilterTimeout = null;
+    speakerCountTimeout = null;
+
     document.getElementById('speaker-count').textContent = '0 Speakers Detected';
 
     // Clear UI
     transcriptFeed.innerHTML = '<div class="placeholder">Waiting for incoming audio...</div>';
+
+    // Clear speaker filters UI
+    const filterContainer = document.getElementById('speaker-filters');
+    if (filterContainer) filterContainer.innerHTML = '';
 
     // Clear LocalStorage
     localStorage.removeItem('transcription-history');
