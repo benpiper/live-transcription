@@ -456,6 +456,7 @@ parser.add_argument("--port", type=int, default=8000, help="Web dashboard port")
 parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit")
 parser.add_argument("--device", type=int, help="Input device ID")
 parser.add_argument("--reload", action="store_true", help="Auto-reload on code changes (Web mode only)")
+parser.add_argument("--ssl", action="store_true", help="Enable HTTPS/SSL for the web dashboard")
 parser.add_argument("--session", "-s", type=str, help="Load or create a named session")
 parser.add_argument("--list-sessions", action="store_true", help="List all saved sessions and exit")
 args = parser.parse_args()
@@ -494,7 +495,12 @@ if __name__ == "__main__":
     if args.web:
         import uvicorn
         
-        print(f"\nWeb Dashboard available at http://localhost:{args.port}")
+        ssl_enabled = args.ssl or get_setting("ssl_enabled", False)
+        protocol = "https" if ssl_enabled else "http"
+        print(f"\nWeb Dashboard available at {protocol}://localhost:{args.port}")
+        
+        ssl_keyfile = get_setting("ssl_keyfile", "key.pem") if ssl_enabled else None
+        ssl_certfile = get_setting("ssl_certfile", "cert.pem") if ssl_enabled else None
         
         try:
             if args.reload:
@@ -505,10 +511,19 @@ if __name__ == "__main__":
                     port=args.port,
                     reload=True,
                     reload_includes=["*.py", "*.html", "*.js", "*.css", "config.json"],
-                    reload_excludes=["sessions/*", "*.log", "transcript.txt"]
+                    reload_excludes=["sessions/*", "*.log", "transcript.txt"],
+                    ssl_keyfile=ssl_keyfile,
+                    ssl_certfile=ssl_certfile
                 )
             else:
-                uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="error")
+                uvicorn.run(
+                    app, 
+                    host="0.0.0.0", 
+                    port=args.port, 
+                    log_level="error",
+                    ssl_keyfile=ssl_keyfile,
+                    ssl_certfile=ssl_certfile
+                )
         except KeyboardInterrupt:
             pass
     else:

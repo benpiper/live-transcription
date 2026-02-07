@@ -87,6 +87,9 @@
         "diarization_threshold": 0.32,
         "min_speaker_samples": 48000,
         "voice_profiles_dir": "voice_profiles",
-        "voice_match_threshold": 0.7
+        "voice_match_threshold": 0.7,
+        "ssl_enabled": false,
+        "ssl_certfile": "cert.pem",
+        "ssl_keyfile": "key.pem"
     }
 }

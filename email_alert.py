@@ -15,6 +15,7 @@ from email.mime.application import MIMEApplication
 import websockets
 import numpy as np
 import urllib.request
+import ssl
 
 # Configure logging
 logging.basicConfig(
@@ -183,8 +184,14 @@ class EmailAlertTool:
         http_url = ws_url.replace("ws://", "http://").replace("wss://", "https://").replace("/ws", "/api/session/current")
         
         logger.info(f"Fetching initial context from {http_url}...")
+        
+        # Create SSL context to handle self-signed certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
         try:
-            with urllib.request.urlopen(http_url, timeout=5) as response:
+            with urllib.request.urlopen(http_url, timeout=5, context=ssl_context) as response:
                 data = json.loads(response.read().decode())
                 if data.get("active") and "transcripts" in data:
                     transcripts = data["transcripts"]
@@ -216,7 +223,15 @@ class EmailAlertTool:
         while self.running:
             try:
                 logger.info(f"Connecting to WebSocket at {uri}...")
-                async with websockets.connect(uri) as websocket:
+                
+                # Create SSL context for wss:// if needed
+                ssl_context = None
+                if uri.startswith("wss://"):
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                
+                async with websockets.connect(uri, ssl=ssl_context) as websocket:
                     logger.info("Connected to transcription feed.")
                     while True:
                         message = await websocket.recv()

@@ -15,3 +15,4 @@ sessions/
 pretrained_models/
 voice_profiles/
 email_config.json
+*.pem

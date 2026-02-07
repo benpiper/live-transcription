@@ -12,6 +12,7 @@ A high-performance, real-time audio transcription tool using the `faster-whisper
 - **Silence-Aware Chunking**: Intelligently waits for natural pauses in speech to transcribe, preventing mid-word cut-offs.
 - **Hallucination Suppression**: Advanced filtering using `no_speech_prob`, `avg_logprob`, and `compression_ratio` to eliminate "YouTube-style" ghosts.
 - **Custom Vocabulary & Corrections**: Bias the AI toward specific terms and apply automated phonetic corrections via a JSON config file.
+- **HTTPS & Secure WebSockets**: Optional SSL support for secure web dashboard access and data streaming.
 - **File Output**: Automatically save all transcriptions to a text file with real-time flushing.
 
 ## 🛠 Prerequisites
@@ -68,6 +69,7 @@ python3 real_time_transcription.py --input test.mp3 --diarize --web --config con
 | `--list-sessions` | | List all saved sessions and exit |
 | `--list-devices` | | List available audio devices and exit |
 | `--device` | | Selected input device ID |
+| `--ssl` | | Enable HTTPS/SSL for the web dashboard |
 | `--reload` | | Auto-reload backend on code changes (Web mode only) |
 
 ## 📁 Sessions
@@ -211,6 +213,9 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `noise_floor` | `0.001` | `0.0` - `1.0` | **(Higher = More Strict)**. The minimum audio volume required to trigger a transcription. Blocks below this level skip all heavy processing to save CPU. |
 | `voice_profiles_dir` | `voice_profiles` | string | Directory containing voice profile JSON files. |
 | `voice_match_threshold` | `0.7` | `0.0` - `1.0` | **(Higher = More Strict)**. Cosine similarity threshold for matching voice profiles. Higher values require closer matches. |
+| `ssl_enabled` | `false` | `true`, `false` | Enable SSL for the web server by default. |
+| `ssl_certfile` | `cert.pem` | string | Path to the SSL certificate file. |
+| `ssl_keyfile` | `key.pem` | string | Path to the SSL private key file. |
 
 ## 🎤 Voice Profiles
 
@@ -254,6 +259,24 @@ A separate utility is provided to monitor transcripts and send email alerts when
    ```
 
 The tool connects to the live feed via WebSocket and applies a configurable rate limit (default 5 minutes) per keyword to avoid alert fatigue.
+
+## 🔒 Security & HTTPS
+
+To enable secure access to the web dashboard, use the `--ssl` flag:
+
+```bash
+python3 real_time_transcription.py --web --ssl
+```
+
+### Self-Signed Certificates
+For local development, you can generate a self-signed certificate:
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
+```
+When using a self-signed certificate, your browser will display a warning. You must manually "Proceed" to access the UI.
+
+### Production Certificates
+For production use, place your `fullchain.pem` and `privkey.pem` (from Let's Encrypt or similar) in the project directory and update `config.json` accordingly.
 
 ## 📜 License
 
