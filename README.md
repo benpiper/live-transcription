@@ -123,8 +123,8 @@ The application follows a **client-server architecture** with a Python backend a
 │  │ (transcript DOM) │  │ (Canvas API)     │  │ (load/save/switch)   │  │
 │  └──────────────────┘  └──────────────────┘  └──────────────────────┘  │
 │                                                                         │
-│  Audio Storage: IndexedDB (keyed by origin_time for playback)           │
-│  Settings: localStorage (theme, watchwords, history limit)              │
+│  Audio Storage: IndexedDB (on-demand loading for memory efficiency)        │
+│  Settings: localStorage (theme, watchwords, display preferences)            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -146,8 +146,8 @@ The application follows a **client-server architecture** with a Python backend a
 | **Transcript Feed** | Vanilla JS + DOM | Displays live transcripts with speaker labels |
 | **Audio Visualizer** | Canvas API | Real-time waveform visualization |
 | **Audio Playback** | Web Audio API | Replay individual transcript segments |
-| **Audio Storage** | IndexedDB | Browser-side audio blob storage (keyed by `origin_time`) |
-| **Settings** | localStorage | Theme, watchwords, scroll lock state |
+| **Audio Storage** | IndexedDB | Browser-side audio blob storage with on-demand loading to minimize memory footprint |
+| **Settings** | localStorage | Persistent preferences (theme, watchwords, scroll lock, etc.) |
 
 ### Data Flow
 

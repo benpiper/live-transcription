@@ -30,6 +30,7 @@ function ensureAudioContext() {
             dataArray = new Uint8Array(bufferLength);
 
             // Start visualization loop
+            updateVisualizerColors();
             requestAnimationFrame(drawVisualizer);
         } catch (e) {
             console.error("Failed to create AudioContext:", e);
@@ -60,6 +61,17 @@ let sessionLoaded = false;   // Prevents processing new transcripts until sessio
 // Analysis node for spectrum visualization
 let analyser;
 let dataArray;
+let cachedPrimaryColor = '#38bdf8';
+let cachedAccentColor = '#818cf8';
+
+function updateVisualizerColors() {
+    const style = getComputedStyle(document.documentElement);
+    cachedPrimaryColor = style.getPropertyValue('--primary').trim() || '#38bdf8';
+    cachedAccentColor = style.getPropertyValue('--accent').trim() || '#818cf8';
+}
+
+let lastVolumeUpdateTime = 0;
+const VOLUME_UPDATE_INTERVAL = 100; // 10fps for volume text updates
 
 console.log("App initializing...");
 
@@ -203,10 +215,12 @@ function connect() {
                     console.log("Received transcript:", data.text);
                     addTranscriptItem(data);
                 } else if (data.type === 'volume') {
-                    // Update visualizer peak even during streaming silence
-                    drawVisualizer(data.peak);
-                    volLevel.textContent = data.peak.toFixed(4);
-                    volStatus.textContent = data.peak > 0.004 ? 'Active' : 'Quiet';
+                    const now = Date.now();
+                    if (now - lastVolumeUpdateTime > VOLUME_UPDATE_INTERVAL) {
+                        volLevel.textContent = data.peak.toFixed(4);
+                        volStatus.textContent = data.peak > 0.004 ? 'Active' : 'Quiet';
+                        lastVolumeUpdateTime = now;
+                    }
                 }
             } catch (e) {
                 console.error("Error parsing JSON message:", e);
@@ -221,22 +235,26 @@ function connect() {
 function handleAudioData(data) {
     const floatData = new Float32Array(data);
 
-    // Update peak for volume stat (legacy use)
-    let peak = 0;
-    for (let i = 0; i < floatData.length; i++) {
-        const abs = Math.abs(floatData[i]);
-        if (abs > peak) peak = abs;
+    // Update peak for volume stat (throttled)
+    const now = Date.now();
+    if (now - lastVolumeUpdateTime > VOLUME_UPDATE_INTERVAL) {
+        let peak = 0;
+        for (let i = 0; i < floatData.length; i++) {
+            const abs = Math.abs(floatData[i]);
+            if (abs > peak) peak = abs;
+        }
+        volLevel.textContent = peak.toFixed(4);
+        volStatus.textContent = peak > 0.004 ? 'Active' : 'Quiet';
+        lastVolumeUpdateTime = now;
     }
-    volLevel.textContent = peak.toFixed(4);
-    volStatus.textContent = peak > 0.004 ? 'Active' : 'Quiet';
 
     // Store in history buffer (keep approx 30 seconds)
-    const now = Date.now() / 1000;
-    rawAudioHistory.push({ timestamp: now, chunk: floatData });
+    const timestampNow = Date.now() / 1000;
+    rawAudioHistory.push({ timestamp: timestampNow, chunk: floatData });
 
     // Prune raw buffer (120s window to handle long transcription latency)
     const windowSec = 120;
-    while (rawAudioHistory.length > 0 && rawAudioHistory[0].timestamp < now - windowSec) {
+    while (rawAudioHistory.length > 0 && rawAudioHistory[0].timestamp < timestampNow - windowSec) {
         rawAudioHistory.shift();
     }
 
@@ -497,22 +515,21 @@ function drawVisualizer() {
     let barHeight;
     let x = 0;
 
-    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#38bdf8';
-    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#818cf8';
-
     for (let i = 0; i < dataArray.length; i++) {
         barHeight = (dataArray[i] / 255) * height;
 
-        const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
-        gradient.addColorStop(0, primaryColor);
-        gradient.addColorStop(1, accentColor);
+        const xPos = x;
+        const yPos = height - barHeight;
 
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, height - barHeight, barWidth - 2, barHeight);
+        ctx.fillStyle = cachedPrimaryColor;
+        ctx.fillRect(xPos, yPos, barWidth - 2, barHeight);
 
         x += barWidth + 1;
     }
 }
+
+// Pre-create gradient once when colors change? Actually, solid color is much faster for animation.
+// If user really wants gradient, it should be created once outside the loop.
 
 // Speaker Filtering (Multi-select dropdown)
 
@@ -1170,6 +1187,7 @@ function setTheme(newTheme) {
     document.documentElement.setAttribute('data-theme', theme);
     themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
     localStorage.setItem('theme', theme);
+    updateVisualizerColors(); // Refresh colors for visualizer
 }
 
 themeToggle.addEventListener('click', () => {
