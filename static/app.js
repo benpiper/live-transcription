@@ -114,19 +114,12 @@ async function loadCurrentSession() {
             const fragment = document.createDocumentFragment();
 
             for (const t of data.transcripts) {
-                // Try to match audio from IndexedDB using origin_time
-                let audioData = null;
-                if (t.origin_time && db) {
-                    const audioKey = `audio-${t.origin_time}`;
-                    audioData = await getAudioFromDB(audioKey);
-                }
-
-                // Add to transcriptionHistory
+                // Add to transcriptionHistory without loading binary audio into RAM
                 const historyItem = {
                     id: t.origin_time ? `audio-${t.origin_time}` : `temp-${Date.now()}-${Math.random()}`,
                     speaker: t.speaker,
                     text: t.text,
-                    audio: audioData,
+                    audio: null, // Don't hold binary audio in memory
                     timestamp: t.timestamp,
                     origin_time: t.origin_time,
                     duration: t.duration,
@@ -134,9 +127,9 @@ async function loadCurrentSession() {
                     el: null
                 };
 
-                const element = createTranscriptElement(t, true, audioData);  // Pass audio data
+                const element = createTranscriptElement(t, true); // No need to pass audio data
                 historyItem.el = element;
-                element.dataset.historyId = historyItem.id; // Internal link
+                element.dataset.historyId = historyItem.id;
                 transcriptionHistory.push(historyItem);
 
                 fragment.appendChild(element);
@@ -310,8 +303,8 @@ function triggerNotification(text) {
     }
 }
 
-// Creates a transcript DOM element without appending it (for batch operations)
-function createTranscriptElement(data, fromSession = false, audioData = null) {
+// Creates a transcript DOM element without appending it
+function createTranscriptElement(data, fromSession = false) {
     const item = document.createElement('div');
     item.className = 'transcript-item';
 
@@ -320,8 +313,8 @@ function createTranscriptElement(data, fromSession = false, audioData = null) {
         item.dataset.id = `audio-${data.origin_time}`;
     }
 
-    // Mark if audio is available
-    const hasAudio = audioData !== null;
+    // Audio is available if we have an origin_time (stored in IndexedDB)
+    const hasAudio = !!data.origin_time;
 
     // Check for watchwords
     if (checkWatchwords(data.text)) {
@@ -413,7 +406,9 @@ function addTranscriptItem(data, fromSession = false) {
                 combinedAudio.set(chunk, offset);
                 offset += chunk.length;
             }
-            historyItem.audio = combinedAudio;
+
+            // We save to DB but DON'T keep it in historyItem.audio to save RAM
+            // historyItem.audio remains null
             item.dataset.id = historyItem.id;
 
             saveAudioToDB(historyItem.id, combinedAudio);
@@ -682,18 +677,24 @@ document.getElementById('reset-filters').addEventListener('click', () => {
     applyMultiSpeakerFilter();
 });
 
-function downloadSegment(id) {
+async function downloadSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
     if (!item) return;
 
-    const buffer = item.audio;
-    const wavData = encodeWAV(buffer, 16000);
+    // Load from DB on demand
+    const audioData = await getAudioFromDB(id);
+    if (!audioData) {
+        console.warn("Audio not found for segment:", id);
+        return;
+    }
+
+    const wavData = encodeWAV(audioData, 16000);
     const blob = new Blob([wavData], { type: 'audio/wav' });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `clip_${id.replace('segment-', '')}.wav`;
+    a.download = `clip_${id.replace('audio-', '')}.wav`;
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -747,9 +748,13 @@ function writeString(view, offset, string) {
     }
 }
 
-function playSegment(id) {
+async function playSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
-    if (!item || !item.audio) {
+    if (!item) return;
+
+    // Load from DB on demand
+    const audioData = await getAudioFromDB(id);
+    if (!audioData) {
         console.warn("No audio data for segment:", id);
         return;
     }
@@ -794,8 +799,8 @@ function playSegment(id) {
         btn.classList.add('playing');
     }
 
-    const buffer = context.createBuffer(1, item.audio.length, 16000);
-    buffer.getChannelData(0).set(item.audio);
+    const buffer = context.createBuffer(1, audioData.length, 16000);
+    buffer.getChannelData(0).set(audioData);
 
     const source = context.createBufferSource();
     source.buffer = buffer;
@@ -846,10 +851,11 @@ function deleteAudioFromDB(id) {
     store.delete(id);
 }
 
+// History Pruning
 function pruneHistory() {
-    // Use ONLY the saved limit from localStorage, not the input field
+    // Use saved limit from localStorage or default to 100
     const savedLimit = localStorage.getItem('history-limit');
-    const limit = savedLimit ? parseInt(savedLimit) : 60;
+    const limit = savedLimit ? parseInt(savedLimit) : 100;
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
@@ -864,41 +870,6 @@ function pruneHistory() {
             removed.el.remove();
         }
     }
-}
-
-function applyHistoryLimit() {
-    // Read from input, save to localStorage, then prune
-    const limitInput = document.getElementById('history-limit');
-    if (!limitInput) return;
-    const limit = parseInt(limitInput.value) || 60;
-
-    // Save to localStorage
-    localStorage.setItem('history-limit', limit);
-
-    // Now prune using the newly saved value
-    pruneHistory();
-}
-
-
-
-
-
-
-// Initial setup for history limit
-const limitInput = document.getElementById('history-limit');
-const applyHistoryBtn = document.getElementById('apply-history-limit');
-
-if (limitInput) {
-    const savedLimit = localStorage.getItem('history-limit');
-    if (savedLimit) {
-        limitInput.value = savedLimit;
-    } else {
-        limitInput.value = 60; // New default
-    }
-}
-
-if (applyHistoryBtn) {
-    applyHistoryBtn.addEventListener('click', applyHistoryLimit);
 }
 
 
@@ -1279,7 +1250,6 @@ function clearFullHistory() {
     }
 }
 
-document.getElementById('clear-history').addEventListener('click', clearFullHistory);
 
 // Initialization (Remove old call, moved to DB success)
 const savedTheme = localStorage.getItem('theme') || 'dark';

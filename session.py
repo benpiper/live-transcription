@@ -92,6 +92,12 @@ class TranscriptionSession:
     def add_transcript(self, transcript: dict):
         """Add a transcript record to the session."""
         self.transcripts.append(transcript)
+        
+        # Cap in-memory transcripts to prevent unbounded growth
+        # 2000 is a generous limit that stays well within safe memory bounds
+        if len(self.transcripts) > 2000:
+            self.transcripts.pop(0)
+            
         self.updated_at = datetime.now().isoformat()
     
     def load_speaker_model(self):
