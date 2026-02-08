@@ -71,12 +71,12 @@
     "settings": {
         "device": "auto",
         "model_size": "large-v3",
-        "compute_type": "auto",
+        "compute_type": "int8_float16",
         "initial_prompt": "Emergency dispatch radio communications for South Carolina. 10-codes, unit numbers, street addresses, cross streets.",
         "no_speech_threshold": 0.85,
         "log_prob_threshold": -0.8,
         "compression_ratio_threshold": 2.2,
-        "beam_size": 7,
+        "beam_size": 5,
         "min_silence_duration_ms": 500,
         "avg_logprob_cutoff": -0.5,
         "no_speech_prob_cutoff": 0.15,
@@ -87,7 +87,7 @@
         "diarization_threshold": 0.32,
         "min_speaker_samples": 48000,
         "voice_profiles_dir": "voice_profiles",
-        "voice_match_threshold": 0.7,
+        "voice_match_threshold": 0.6,
         "ssl_enabled": false,
         "ssl_certfile": "cert.pem",
         "ssl_keyfile": "key.pem"
