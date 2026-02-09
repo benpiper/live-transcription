@@ -31,7 +31,10 @@ function ensureAudioContext() {
 
             // Start visualization loop
             updateVisualizerColors();
-            requestAnimationFrame(drawVisualizer);
+            setupCanvasVisibilityObserver();
+            if (isCanvasVisible) {
+                startVisualizer();
+            }
         } catch (e) {
             console.error("Failed to create AudioContext:", e);
         }
@@ -40,6 +43,33 @@ function ensureAudioContext() {
         audioCtx.resume();
     }
     return audioCtx;
+}
+
+function setupCanvasVisibilityObserver() {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                isCanvasVisible = true;
+                startVisualizer();
+            } else {
+                isCanvasVisible = false;
+                stopVisualizer();
+            }
+        });
+    }, { threshold: 0.1 });
+
+    observer.observe(canvas);
+}
+
+function startVisualizer() {
+    if (!isVisualizerRunning) {
+        isVisualizerRunning = true;
+        drawVisualizer();
+    }
+}
+
+function stopVisualizer() {
+    isVisualizerRunning = false;
 }
 
 // On-demand playback state
@@ -57,6 +87,9 @@ let watchwords = [];
 let theme = 'dark';
 let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
 let sessionLoaded = false;   // Prevents processing new transcripts until session is loaded
+let isCanvasVisible = true;  // Track if canvas is in viewport
+let isVisualizerRunning = false;  // Track if visualizer animation is active
+let reconnectAttempts = 0;  // Track reconnection attempts
 
 // Analysis node for spectrum visualization
 let analyser;
@@ -176,11 +209,16 @@ function connect() {
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     console.log("Connecting to WebSocket:", wsUrl);
 
+    // Show connecting state
+    statusBadge.textContent = 'Connecting...';
+    statusBadge.classList.remove('connected');
+
     ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = async () => {
         console.log("WebSocket connected");
+        reconnectAttempts = 0;  // Reset attempts on successful connection
         statusBadge.textContent = 'Connected';
         statusBadge.classList.add('connected');
 
@@ -191,13 +229,24 @@ function connect() {
 
     ws.onclose = (e) => {
         console.warn("WebSocket closed:", e.code, e.reason);
-        statusBadge.textContent = 'Disconnected';
+        reconnectAttempts++;
+        const retryDelay = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), 30000);  // Exponential backoff, max 30s
+
+        if (reconnectAttempts === 1) {
+            statusBadge.textContent = `Reconnecting...`;
+        } else {
+            statusBadge.textContent = `Reconnecting (attempt ${reconnectAttempts})...`;
+        }
         statusBadge.classList.remove('connected');
-        setTimeout(connect, 2000);
+
+        console.log(`Reconnection attempt ${reconnectAttempts} in ${retryDelay}ms`);
+        setTimeout(connect, retryDelay);
     };
 
     ws.onerror = (err) => {
         console.error("WebSocket error:", err);
+        statusBadge.textContent = 'Error';
+        statusBadge.classList.remove('connected');
     };
 
     ws.onmessage = (event) => {
@@ -358,8 +407,12 @@ function createTranscriptElement(data, fromSession = false) {
 
     item.innerHTML = `
         <div class="transcript-header">
-            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}" 
-                  onclick="filterBySpeaker('${itemSpeaker}')" 
+            <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}"
+                  onclick="filterBySpeaker('${itemSpeaker}')"
+                  onkeydown="if(event.key==='Enter'||event.key===' ')filterBySpeaker('${itemSpeaker}')"
+                  tabindex="0"
+                  role="button"
+                  aria-label="Filter by speaker ${itemSpeaker}"
                   title="Click to filter by this speaker">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
@@ -458,6 +511,10 @@ function addTranscriptItem(data, fromSession = false) {
         <div class="transcript-header">
             <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}"
                   onclick="filterBySpeaker('${itemSpeaker}')"
+                  onkeydown="if(event.key==='Enter'||event.key===' ')filterBySpeaker('${itemSpeaker}')"
+                  tabindex="0"
+                  role="button"
+                  aria-label="Filter by speaker ${itemSpeaker}"
                   title="Click to filter by this speaker">${data.speaker || 'Unknown'}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
@@ -500,7 +557,7 @@ function throttledUpdateSpeakerCount() {
 }
 
 function drawVisualizer() {
-    if (!analyser || !ctx) return;
+    if (!analyser || !ctx || !isVisualizerRunning) return;
 
     requestAnimationFrame(drawVisualizer);
 
