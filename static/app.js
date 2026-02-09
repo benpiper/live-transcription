@@ -872,7 +872,7 @@ function deleteAudioFromDB(id) {
 function pruneHistory() {
     // Use saved limit from localStorage or default to 100
     const savedLimit = localStorage.getItem('history-limit');
-    const limit = savedLimit ? parseInt(savedLimit) : 100;
+    const limit = savedLimit ? parseInt(savedLimit) : 250;
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
