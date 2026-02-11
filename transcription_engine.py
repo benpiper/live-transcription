@@ -358,3 +358,35 @@ def _get_context_tail(audio: np.ndarray) -> np.ndarray:
     if len(audio) > context_samples:
         return audio[-context_samples:]
     return audio
+
+
+def cleanup_model():
+    """
+    Release GPU resources held by the Whisper model.
+
+    Called during graceful shutdown to ensure GPU memory is returned to the system.
+    """
+    global model
+
+    if model is None:
+        return
+
+    logger.info("Cleaning up Whisper model...")
+
+    try:
+        del model
+        model = None
+
+        # Release GPU memory if CUDA is available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            logger.info("GPU memory released")
+
+        # Force garbage collection
+        import gc
+        gc.collect()
+
+        logger.info("Model cleanup complete")
+    except Exception as e:
+        logger.error(f"Error during model cleanup: {e}")

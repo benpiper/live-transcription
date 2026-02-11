@@ -47,6 +47,7 @@ from speaker_manager import speaker_manager, MIN_SPEAKER_ID_SAMPLES
 setup_cuda_paths()
 
 from web_server import create_app, set_queues, ws_manager
+from shutdown_handler import register_shutdown_handlers
 
 # Audio parameters
 BUFFER_SIZE = 4096
@@ -302,6 +303,65 @@ def output_transcription(merged_segments, start_time, audio_flat):
             logger.debug(f"Session tracking failed: {e}")
 
 
+def cleanup_resources():
+    """Clean up all resources before shutdown."""
+    global speaker_model
+
+    logger.info("Starting resource cleanup...")
+
+    # 1. Set stop event
+    stop_event.set()
+
+    # 2. Drain critical queues
+    remaining = []
+    try:
+        while not broadcast_queue.empty():
+            remaining.append(broadcast_queue.get_nowait())
+    except queue.Empty:
+        pass
+
+    if remaining:
+        logger.info(f"Draining {len(remaining)} queued transcript(s)")
+
+    # 3. Save session
+    try:
+        from session import get_session, save_session
+        session = get_session()
+        if session and len(session.transcripts) > 0:
+            save_session(session)
+            logger.info(f"Session saved: {session.name} ({len(session.transcripts)} transcript(s))")
+    except Exception as e:
+        logger.error(f"Session save failed: {e}")
+
+    # 4. Close WebSocket connections
+    try:
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if not loop.is_closed():
+            loop.run_until_complete(ws_manager.close_all())
+    except Exception as e:
+        logger.debug(f"WebSocket cleanup error: {e}")
+
+    # 5. Clean up models
+    try:
+        from transcription_engine import cleanup_model
+        cleanup_model()
+    except Exception as e:
+        logger.error(f"Model cleanup failed: {e}")
+
+    # 6. Clean up speaker model
+    if speaker_model:
+        del speaker_model
+        speaker_model = None
+
+    logger.info("Resource cleanup complete")
+
+
 def feed_file_to_queue(file_path: str):
     """Feed an audio file into the transcription queue at real-time speed."""
     import soundfile as sf
@@ -396,7 +456,10 @@ def boot_app():
     transcription_thread = threading.Thread(target=transcribe_audio_loop, daemon=True)
     transcription_thread.start()
     print("Core processing threads started.")
-    
+
+    # Register shutdown handlers
+    register_shutdown_handlers(stop_event, cleanup_resources)
+
     # Auto-save session periodically if --session flag is used
     if session_name:
         def autosave_loop():
@@ -462,7 +525,7 @@ parser.add_argument("--list-sessions", action="store_true", help="List all saved
 args = parser.parse_args()
 
 # Set broadcast queues for web server (needed at module level for reload)
-set_queues(broadcast_queue, audio_broadcast_queue)
+set_queues(broadcast_queue, audio_broadcast_queue, stop_event)
 
 # Create app at module level so uvicorn --reload can find it
 app = create_app(boot_callback=boot_app, input_callback=run_input_source)
@@ -517,18 +580,18 @@ if __name__ == "__main__":
                 )
             else:
                 uvicorn.run(
-                    app, 
-                    host="0.0.0.0", 
-                    port=args.port, 
+                    app,
+                    host="0.0.0.0",
+                    port=args.port,
                     log_level="error",
                     ssl_keyfile=ssl_keyfile,
                     ssl_certfile=ssl_certfile
                 )
         except KeyboardInterrupt:
-            pass
+            cleanup_resources()
     else:
         # CLI-only mode
         boot_app()
         run_input_source()
-        stop_event.set()
+        cleanup_resources()
         print("\nStopped.")

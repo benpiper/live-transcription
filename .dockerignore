@@ -1,0 +1,43 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.coverage
+venv/
+env/
+.env
+.env.local
+
+# Data directories (don't include in image, use volumes)
+sessions/*
+voice_profiles/*
+pretrained_models/*
+
+# Large audio files
+*.wav
+*.mp3
+*.m4a
+*.flac
+
+# Logs
+*.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+README-DOCKER.md
+LICENSE
+CLAUDE.md

@@ -8,6 +8,7 @@ and the broadcaster worker for real-time updates.
 import asyncio
 import logging
 import queue
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -54,6 +55,30 @@ class ConnectionManager:
                 logger.debug(f"Failed to send bytes to client: {e}")
                 self.disconnect(connection)
 
+    async def close_all(self):
+        """Close all active WebSocket connections gracefully."""
+        if not self.active_connections:
+            return
+
+        logger.info(f"Closing {len(self.active_connections)} WebSocket connection(s)...")
+
+        # Send shutdown message
+        shutdown_msg = {"type": "shutdown", "message": "Server is shutting down"}
+        await self.broadcast_json(shutdown_msg)
+
+        # Give clients 500ms to process
+        await asyncio.sleep(0.5)
+
+        # Close all connections
+        for connection in list(self.active_connections):
+            try:
+                await connection.close()
+            except Exception as e:
+                logger.debug(f"Error closing connection: {e}")
+
+        self.active_connections.clear()
+        logger.info("All WebSocket connections closed")
+
 
 # Global connection manager instance
 ws_manager = ConnectionManager()
@@ -61,26 +86,28 @@ ws_manager = ConnectionManager()
 # Queues for inter-thread communication (set by main module)
 broadcast_queue: queue.Queue = None
 audio_broadcast_queue: queue.Queue = None
+stop_event: threading.Event = None
 
 
-def set_queues(json_queue: queue.Queue, audio_queue: queue.Queue):
-    """Set the broadcast queues from the main module."""
-    global broadcast_queue, audio_broadcast_queue
+def set_queues(json_queue: queue.Queue, audio_queue: queue.Queue, stop_evt: threading.Event = None):
+    """Set the broadcast queues and stop event from the main module."""
+    global broadcast_queue, audio_broadcast_queue, stop_event
     broadcast_queue = json_queue
     audio_broadcast_queue = audio_queue
+    stop_event = stop_evt
 
 
 async def websocket_broadcaster():
     """
     Background worker to broadcast data from queues to WebSocket clients.
-    
+
     Continuously drains the broadcast queues and sends updates to all
     connected clients.
     """
     logger.info("WebSocket Broadcaster started.")
     print("WebSocket Broadcaster started.")
-    
-    while True:
+
+    while not (stop_event and stop_event.is_set()):
         try:
             # Broadcast JSON transcripts
             if broadcast_queue is not None:
@@ -90,7 +117,7 @@ async def websocket_broadcaster():
                         await ws_manager.broadcast_json(data)
                     except queue.Empty:
                         break
-            
+
             # Broadcast raw audio
             if audio_broadcast_queue is not None:
                 while not audio_broadcast_queue.empty():
@@ -99,12 +126,16 @@ async def websocket_broadcaster():
                         await ws_manager.broadcast_bytes(audio_data)
                     except queue.Empty:
                         break
-            
+
             await asyncio.sleep(0.02)  # 50 updates/sec max
-            
+
         except Exception as e:
             logger.error(f"Broadcaster error: {e}")
             await asyncio.sleep(1)
+
+    # Shutdown sequence
+    logger.info("WebSocket broadcaster shutting down...")
+    await ws_manager.close_all()
 
 
 def create_app(boot_callback=None, input_callback=None) -> FastAPI:
@@ -124,16 +155,24 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
         """Manage application lifecycle."""
         # Startup
         broadcast_task = asyncio.create_task(websocket_broadcaster())
-        
+
         if boot_callback:
             boot_callback()
         if input_callback:
             import threading
             threading.Thread(target=input_callback, daemon=True).start()
-        
+
         yield
-        
-        # Shutdown (task cancelled automatically)
+
+        # Shutdown
+        if stop_event:
+            stop_event.set()
+        await ws_manager.close_all()
+        broadcast_task.cancel()
+        try:
+            await broadcast_task
+        except asyncio.CancelledError:
+            pass
     
     app = FastAPI(lifespan=lifespan)
     

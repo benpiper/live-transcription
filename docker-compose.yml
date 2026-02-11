@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  transcription:
+    build: .
+    image: live-transcription:latest
+    container_name: live-transcription
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./sessions:/data/sessions
+      - ./voice_profiles:/data/voice_profiles
+      - ./pretrained_models:/data/pretrained_models
+      - ./config.json:/app/config.json:ro
+      - huggingface-cache:/root/.cache/huggingface
+
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+
+    devices:
+      - /dev/snd:/dev/snd
+
+    security_opt:
+      - no-new-privileges:true
+
+    mem_limit: 8g
+    shm_size: 2g
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  huggingface-cache:
