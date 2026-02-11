@@ -589,9 +589,11 @@ if __name__ == "__main__":
                 )
         except KeyboardInterrupt:
             cleanup_resources()
+            sys.exit(0)
     else:
         # CLI-only mode
         boot_app()
         run_input_source()
         cleanup_resources()
         print("\nStopped.")
+        sys.exit(0)
