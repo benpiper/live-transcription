@@ -7,6 +7,8 @@ const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 const latencyStat = document.getElementById('latency-stat');
 const bufferStat = document.getElementById('buffer-stat');
+const vadStat = document.getElementById('vad-stat');
+const processTimeStat = document.getElementById('process-time-stat');
 const silentAudio = document.getElementById('silent-audio');
 
 let ws;
@@ -505,6 +507,41 @@ function addTranscriptItem(data, fromSession = false) {
     if (data.origin_time && !fromSession) {
         const latency = (Date.now() / 1000) - data.origin_time;
         latencyStat.textContent = `${(latency * 1000).toFixed(0)}ms`;
+
+        // Update VAD confidence if available
+        if (data.vad_confidence !== undefined && data.vad_confidence !== null) {
+            const vadPercent = (data.vad_confidence * 100).toFixed(0);
+            vadStat.textContent = `${vadPercent}%`;
+
+            // Color-code based on confidence level
+            vadStat.className = 'vad-confidence';
+            if (data.vad_confidence >= 0.7) {
+                vadStat.classList.add('vad-high');  // Green: high confidence
+            } else if (data.vad_confidence >= 0.4) {
+                vadStat.classList.add('vad-med');   // Yellow: medium confidence
+            } else {
+                vadStat.classList.add('vad-low');   // Red: low confidence
+            }
+        } else {
+            vadStat.textContent = 'OFF';
+            vadStat.className = 'vad-confidence vad-disabled';
+        }
+
+        // Update processing time if available
+        if (data.processing_time !== undefined && data.processing_time !== null) {
+            const procTimeMs = (data.processing_time * 1000).toFixed(0);
+            processTimeStat.textContent = `${procTimeMs}ms`;
+
+            // Warn if processing is slower than real-time
+            if (data.processing_time > data.duration) {
+                processTimeStat.classList.add('slow-processing');
+            } else {
+                processTimeStat.classList.remove('slow-processing');
+            }
+        } else {
+            processTimeStat.textContent = '---';
+            processTimeStat.classList.remove('slow-processing');
+        }
 
         const segmentStart = data.origin_time - 0.5;
         const segmentEnd = Date.now() / 1000;

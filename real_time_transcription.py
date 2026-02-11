@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 from config import TRANSCRIPTION_CONFIG, load_config, get_setting
 from transcription_engine import setup_cuda_paths, load_model, transcribe_chunk, SAMPLE_RATE
 from speaker_manager import speaker_manager, MIN_SPEAKER_ID_SAMPLES
+from audio_processing import is_speech
 
 # Setup CUDA before importing web server (which imports ctranslate2)
 setup_cuda_paths()
@@ -185,21 +186,43 @@ def transcribe_audio_loop():
             start_time = timestamp
         
         active_buffer.append(new_chunk)
-        
-        # Calculate recent volume for silence detection
+
+        # Calculate recent volume for silence detection / VAD fallback
         recent_vol = np.linalg.norm(new_chunk) / np.sqrt(len(new_chunk))
-        
+
         # Determine if we should transcribe now
         buffer_duration = len(active_buffer) * (BUFFER_SIZE / SAMPLE_RATE)
         min_win = get_setting("min_window_sec", 1.0)
         max_win = get_setting("max_window_sec", 5.0)
-        
+
+        # Voice Activity Detection (optional ML-based speech detection)
+        vad_enabled = get_setting("vad_enabled", False)
+        vad_confidence_threshold = get_setting("vad_confidence_threshold", 0.5)
+        is_speech_result = None
+        vad_confidence = None
+
+        if vad_enabled:
+            is_speech_result, vad_confidence = is_speech(
+                new_chunk,
+                sample_rate=SAMPLE_RATE,
+                confidence_threshold=vad_confidence_threshold
+            )
+
         should_transcribe = False
-        if buffer_duration >= min_win and recent_vol < 0.002:
-            should_transcribe = True
+        if buffer_duration >= min_win:
+            # Check for silence using VAD if available, fallback to volume
+            if is_speech_result is not None:
+                # VAD is available
+                is_silent = is_speech_result is False
+            else:
+                # Fallback to volume-based detection
+                is_silent = recent_vol < 0.002
+
+            if is_silent:
+                should_transcribe = True
         elif buffer_duration >= max_win:
             should_transcribe = True
-        
+
         if not should_transcribe:
             continue
         
@@ -223,7 +246,11 @@ def transcribe_audio_loop():
             skip_diarization=skip_diarization,
             speaker_model=speaker_model,
             speaker_manager=speaker_manager,
-            output_callback=output_transcription
+            output_callback=lambda segments, start, audio: output_transcription(
+                segments, start, audio,
+                vad_confidence=vad_confidence,
+                processing_time=time.time() - t0
+            )
         )
         t_proc = time.time() - t0
         
@@ -242,22 +269,22 @@ def transcribe_audio_loop():
         active_buffer = []
 
 
-def output_transcription(merged_segments, start_time, audio_flat):
+def output_transcription(merged_segments, start_time, audio_flat, vad_confidence=None, processing_time=None):
     """Callback to handle transcription output."""
     global last_transcript_time, silence_warning_shown
-    
+
     # Reset silence tracking
     last_transcript_time = time.time()
     silence_warning_shown = False
-    
+
     display_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    
+
     for m in merged_segments:
         speaker_tag = f" [{m['speaker']}]"
         conf_val = m.get("confidence", 0)
         conf_tag = f" (conf: {conf_val:.2f})"
         output_line = f"[{display_time}]{speaker_tag}{conf_tag} {m['text']}"
-        
+
         # Broadcast to web clients
         try:
             broadcast_queue.put({
@@ -267,7 +294,9 @@ def output_transcription(merged_segments, start_time, audio_flat):
                 "duration": m["end"] - m["start"],
                 "speaker": m["speaker"],
                 "text": m["text"],
-                "confidence": conf_val
+                "confidence": conf_val,
+                "vad_confidence": vad_confidence,
+                "processing_time": processing_time
             })
         except Exception as e:
             logger.debug(f"Broadcast failed: {e}")

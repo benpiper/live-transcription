@@ -464,6 +464,36 @@ canvas {
     grid-column: span 2;
 }
 
+/* VAD Confidence color coding */
+.vad-confidence.vad-high {
+    color: var(--success);  /* Green */
+}
+
+.vad-confidence.vad-med {
+    color: #fbbf24;  /* Yellow */
+}
+
+.vad-confidence.vad-low {
+    color: var(--danger);  /* Red */
+}
+
+.vad-confidence.vad-disabled {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Processing time warning */
+.slow-processing {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+/* Expand stat-grid to 2x2 layout */
+.stat-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+}
+
 .config-section h3 {
     font-size: 0.8rem;
     text-transform: uppercase;
