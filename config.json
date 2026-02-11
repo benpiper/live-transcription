@@ -90,6 +90,13 @@
         "voice_match_threshold": 0.6,
         "ssl_enabled": false,
         "ssl_certfile": "cert.pem",
-        "ssl_keyfile": "key.pem"
+        "ssl_keyfile": "key.pem",
+        "vad_enabled": false,
+        "vad_confidence_threshold": 0.5,
+        "noise_reduction_enabled": false,
+        "noise_reduction_stationary": true,
+        "noise_reduction_prop_decrease": 1.0,
+        "normalization_method": "peak",
+        "rms_target_level": 0.1
     }
 }

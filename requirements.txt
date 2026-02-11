@@ -6,3 +6,8 @@ librosa
 speechbrain
 torch
 websockets
+silero-vad
+noisereduce
+fastapi
+pydantic
+uvicorn

@@ -15,6 +15,7 @@ from datetime import datetime
 from faster_whisper import WhisperModel
 
 from config import TRANSCRIPTION_CONFIG, get_setting, get_vocabulary, get_corrections
+from audio_processing import reduce_noise, normalize_rms
 
 logger = logging.getLogger(__name__)
 
@@ -178,15 +179,30 @@ def transcribe_chunk(
     
     if volume_norm < 0.002:
         return _get_context_tail(audio_flat)
-    
-    # Normalize audio
-    max_val = np.max(np.abs(audio_flat))
-    if max_val > 0.01:
-        audio_flat = audio_flat / max_val
-    
-    # Get settings
+
+    # Get settings for audio processing
     settings = TRANSCRIPTION_CONFIG["settings"]
-    
+
+    # Apply noise reduction if enabled
+    if settings.get("noise_reduction_enabled", False):
+        audio_flat = reduce_noise(
+            audio_flat,
+            sample_rate=SAMPLE_RATE,
+            stationary=settings.get("noise_reduction_stationary", True),
+            prop_decrease=settings.get("noise_reduction_prop_decrease", 1.0)
+        )
+
+    # Apply normalization (RMS or peak)
+    norm_method = settings.get("normalization_method", "peak")
+    if norm_method == "rms":
+        rms_target = settings.get("rms_target_level", 0.1)
+        audio_flat = normalize_rms(audio_flat, target_rms=rms_target)
+    else:
+        # Default: peak normalization (existing behavior)
+        max_val = np.max(np.abs(audio_flat))
+        if max_val > 0.01:
+            audio_flat = audio_flat / max_val
+
     # Build initial prompt
     prompt_parts = []
     
