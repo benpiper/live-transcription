@@ -7,6 +7,7 @@ const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 const latencyStat = document.getElementById('latency-stat');
 const bufferStat = document.getElementById('buffer-stat');
+const silentAudio = document.getElementById('silent-audio');
 
 let ws;
 let audioCtx;
@@ -43,6 +44,30 @@ function ensureAudioContext() {
         audioCtx.resume();
     }
     return audioCtx;
+}
+
+function setupMediaSession() {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'Live Transcription',
+            artist: 'Transcription App',
+            album: 'Live Feed'
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+            if (!isAudioEnabled) {
+                audioToggle.click();
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+            if (isAudioEnabled) {
+                audioToggle.click();
+            }
+        });
+    } else {
+        console.warn("Media Session API not available - check if using HTTPS");
+    }
 }
 
 function setupCanvasVisibilityObserver() {
@@ -139,6 +164,21 @@ audioToggle.addEventListener('click', () => {
     isAudioEnabled = !isAudioEnabled;
     audioToggle.classList.toggle('active', isAudioEnabled);
     audioToggle.innerHTML = isAudioEnabled ? '<span>🔊</span> Mute Audio' : '<span>🔇</span> Enable Audio';
+
+    // Handle silent audio element for backgrounding
+    if (silentAudio) {
+        if (isAudioEnabled) {
+            silentAudio.play().catch(e => console.error("Failed to play silent audio:", e));
+        } else {
+            silentAudio.pause();
+        }
+    }
+
+    // Update Media Session state
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = isAudioEnabled ? 'playing' : 'paused';
+        console.log("Media Session playback state set to:", navigator.mediaSession.playbackState);
+    }
 });
 
 // Load current session transcripts from server
@@ -225,6 +265,9 @@ function connect() {
         // Load current session transcripts BEFORE processing new messages
         await loadCurrentSession();
         sessionLoaded = true;
+
+        // Initialize Media Session metadata
+        setupMediaSession();
     };
 
     ws.onclose = (e) => {
@@ -1337,6 +1380,8 @@ if (savedWatchwords) {
 }
 
 updateNotificationButton();
+
+setupMediaSession();
 
 connect();
 

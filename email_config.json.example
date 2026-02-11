@@ -17,5 +17,29 @@
     },
     "websocket": {
         "url": "ws://localhost:8000/ws"
+    },
+    "heartbeat": {
+        "enabled": true,
+        "daily_status_enabled": true,
+        "daily_status_time": "09:00",
+        "connection_failure_threshold_minutes": 15,
+        "reconnection_failure_threshold": 3,
+        "reconnection_failure_window_minutes": 30
+    },
+    "retry": {
+        "enabled": true,
+        "max_retries": 5,
+        "initial_backoff_seconds": 60,
+        "max_backoff_seconds": 3600,
+        "backoff_multiplier": 2.0,
+        "persistent_queue_path": "email_retry_queue.json",
+        "max_queue_size": 100,
+        "alert_on_repeated_failures": true,
+        "repeated_failure_threshold": 5
+    },
+    "audio": {
+        "buffer_seconds": 120,
+        "resync_threshold_seconds": 0.5,
+        "extraction_padding_seconds": 0.5
     }
 }
