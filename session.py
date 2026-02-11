@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Session storage directory
 SESSIONS_DIR = Path(__file__).parent / "sessions"
+ARCHIVE_DIR = SESSIONS_DIR / "archive"
 
 
 class TranscriptionSession:
@@ -287,18 +288,214 @@ def list_sessions() -> list:
 def delete_session(name: str) -> bool:
     """
     Delete a saved session.
-    
+
     Args:
         name: Session name to delete
-        
+
     Returns:
         True if deleted, False if not found
     """
     safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in name)
     file_path = SESSIONS_DIR / f"{safe_name}.json"
-    
+
     if file_path.exists():
         file_path.unlink()
         logger.info(f"Session deleted: {name}")
         return True
     return False
+
+
+def archive_session(name: str) -> bool:
+    """
+    Archive a session by moving it to the archive directory.
+
+    Args:
+        name: Session name to archive
+
+    Returns:
+        True if archived, False if not found
+    """
+    safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in name)
+    file_path = SESSIONS_DIR / f"{safe_name}.json"
+
+    if not file_path.exists():
+        logger.warning(f"Cannot archive: session not found: {name}")
+        return False
+
+    # Create archive directory if needed
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
+    archive_path = ARCHIVE_DIR / f"{safe_name}.json"
+
+    # Move file to archive
+    file_path.rename(archive_path)
+    logger.info(f"Session archived: {name} -> {archive_path}")
+    return True
+
+
+def restore_session(name: str) -> bool:
+    """
+    Restore a session from the archive directory.
+
+    Args:
+        name: Session name to restore
+
+    Returns:
+        True if restored, False if not found
+    """
+    safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in name)
+    archive_path = ARCHIVE_DIR / f"{safe_name}.json"
+
+    if not archive_path.exists():
+        logger.warning(f"Cannot restore: archived session not found: {name}")
+        return False
+
+    file_path = SESSIONS_DIR / f"{safe_name}.json"
+
+    # Move file back from archive
+    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    archive_path.rename(file_path)
+    logger.info(f"Session restored: {name}")
+    return True
+
+
+def list_archived_sessions() -> list:
+    """
+    List all archived sessions.
+
+    Returns:
+        List of archived session metadata dicts
+    """
+    if not ARCHIVE_DIR.exists():
+        return []
+
+    sessions = []
+    for file_path in ARCHIVE_DIR.glob("*.json"):
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
+            sessions.append({
+                "name": data.get("name", file_path.stem),
+                "created_at": data.get("created_at"),
+                "updated_at": data.get("updated_at"),
+                "transcript_count": data.get("transcript_count", 0),
+                "file": file_path.name
+            })
+        except Exception as e:
+            logger.warning(f"Failed to read archived session {file_path}: {e}")
+
+    # Sort by updated_at descending
+    sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    return sessions
+
+
+def cleanup_old_sessions(days_threshold: int) -> int:
+    """
+    Archive sessions older than the specified number of days.
+
+    Args:
+        days_threshold: Age threshold in days
+
+    Returns:
+        Number of sessions archived
+    """
+    if not SESSIONS_DIR.exists():
+        return 0
+
+    from datetime import datetime, timedelta
+
+    cutoff_date = datetime.now() - timedelta(days=days_threshold)
+    archived_count = 0
+
+    for file_path in SESSIONS_DIR.glob("*.json"):
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
+
+            updated_at_str = data.get("updated_at", "")
+            if not updated_at_str:
+                continue
+
+            # Parse ISO format timestamp
+            updated_at = datetime.fromisoformat(updated_at_str)
+
+            if updated_at < cutoff_date:
+                session_name = data.get("name", file_path.stem)
+                if archive_session(session_name):
+                    archived_count += 1
+
+        except Exception as e:
+            logger.warning(f"Error processing session {file_path} for cleanup: {e}")
+
+    if archived_count > 0:
+        logger.info(f"Archived {archived_count} old sessions (older than {days_threshold} days)")
+
+    return archived_count
+
+
+def get_session_rollover_status(session: TranscriptionSession = None) -> dict:
+    """
+    Get rollover timer status for a session.
+
+    Args:
+        session: Session to check (defaults to current session)
+
+    Returns:
+        Dict with rollover status information
+    """
+    from datetime import datetime
+    from config import get_session_management_setting
+
+    session = session or _session
+    if not session:
+        return {
+            "current_session_name": None,
+            "created_at": None,
+            "transcript_count": 0,
+            "time_since_creation_seconds": 0,
+            "hours_until_rollover": None,
+            "transcripts_until_rollover": None,
+            "will_rollover_by": None
+        }
+
+    # Parse created_at timestamp
+    created_at = datetime.fromisoformat(session.created_at)
+    now = datetime.now()
+    time_delta = now - created_at
+    time_since_creation = time_delta.total_seconds()
+
+    # Get rollover settings
+    rollover_enabled = get_session_management_setting("enable_rollover", False)
+    rollover_hours = get_session_management_setting("rollover_time_hours", 24)
+    rollover_count = get_session_management_setting("rollover_transcript_count", 10000)
+
+    transcript_count = len(session.transcripts)
+
+    # Calculate time-based rollover
+    hours_until_rollover = None
+    will_rollover_by = None
+    if rollover_enabled and rollover_hours:
+        seconds_until_rollover = (rollover_hours * 3600) - time_since_creation
+        hours_until_rollover = max(0, seconds_until_rollover / 3600)
+        if hours_until_rollover <= 0:
+            will_rollover_by = "time"
+
+    # Calculate count-based rollover
+    transcripts_until_rollover = None
+    if rollover_enabled and rollover_count:
+        count_remaining = max(0, rollover_count - transcript_count)
+        transcripts_until_rollover = count_remaining
+        if count_remaining <= 0 and will_rollover_by is None:
+            will_rollover_by = "count"
+        elif count_remaining <= 0 and will_rollover_by == "time":
+            will_rollover_by = "time"  # Time triggered first
+
+    return {
+        "current_session_name": session.name,
+        "created_at": session.created_at,
+        "transcript_count": transcript_count,
+        "time_since_creation_seconds": time_since_creation,
+        "hours_until_rollover": hours_until_rollover,
+        "transcripts_until_rollover": transcripts_until_rollover,
+        "will_rollover_by": will_rollover_by
+    }

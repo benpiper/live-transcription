@@ -34,6 +34,15 @@ DEFAULT_CONFIG = {
         "min_speaker_samples": 16000,
         "voice_profiles_dir": "voice_profiles",
         "voice_match_threshold": 0.7
+    },
+    "session_management": {
+        "enable_rollover": False,
+        "rollover_time_hours": 24,
+        "rollover_transcript_count": 10000,
+        "enable_archiving": False,
+        "archive_dir": "archive",
+        "archive_old_sessions": False,
+        "archive_age_days": 30
     }
 }
 
@@ -102,6 +111,20 @@ def get_vocabulary() -> list:
 def get_corrections() -> dict:
     """Get the corrections dictionary for post-processing."""
     return TRANSCRIPTION_CONFIG.get("corrections", {})
+
+
+def get_session_management_setting(key: str, default=None):
+    """
+    Get a specific session management setting value with optional default.
+
+    Args:
+        key: The setting key to retrieve
+        default: Default value if key not found
+
+    Returns:
+        The setting value or default
+    """
+    return TRANSCRIPTION_CONFIG.get("session_management", {}).get(key, default)
 
 
 def validate_config() -> list:
@@ -183,7 +206,21 @@ def validate_config() -> list:
     device = settings.get("device", "auto")
     if device not in valid_devices:
         errors.append(f"device '{device}' is not valid. Choose from: {', '.join(valid_devices)}")
-    
+
+    # Session management validation
+    session_mgmt = TRANSCRIPTION_CONFIG.get("session_management", {})
+    try:
+        if session_mgmt.get("rollover_time_hours") and session_mgmt.get("rollover_time_hours") <= 0:
+            errors.append("rollover_time_hours must be greater than 0")
+
+        if session_mgmt.get("rollover_transcript_count") and session_mgmt.get("rollover_transcript_count") <= 0:
+            errors.append("rollover_transcript_count must be greater than 0")
+
+        if session_mgmt.get("archive_age_days") and session_mgmt.get("archive_age_days") <= 0:
+            errors.append("archive_age_days must be greater than 0")
+    except TypeError:
+        errors.append("session_management settings have invalid types")
+
     # Log results
     if errors:
         for err in errors:
@@ -191,5 +228,5 @@ def validate_config() -> list:
             print(f"⚠️  Config warning: {err}")
     else:
         logger.info("Config validation passed")
-    
+
     return errors

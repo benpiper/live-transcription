@@ -39,7 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import our modules
-from config import TRANSCRIPTION_CONFIG, load_config, get_setting
+from config import TRANSCRIPTION_CONFIG, load_config, get_setting, get_session_management_setting
 from transcription_engine import setup_cuda_paths, load_model, transcribe_chunk, SAMPLE_RATE
 from speaker_manager import speaker_manager, MIN_SPEAKER_ID_SAMPLES
 from audio_processing import is_speech
@@ -440,6 +440,100 @@ def feed_file_to_queue(file_path: str):
     audio_queue.put((None, None))
 
 
+def session_rollover_loop():
+    """
+    Monitor session state and trigger rollover based on time or transcript count.
+
+    Runs as a daemon thread and periodically checks if rollover conditions are met.
+    When triggered:
+    1. Saves the current session
+    2. Archives it (if enabled)
+    3. Creates a new session
+    """
+    from config import get_session_management_setting
+    from session import get_session, save_session, archive_session, init_session, cleanup_old_sessions
+
+    logger.info("Session rollover monitor started")
+
+    while not stop_event.is_set():
+        try:
+            # Check if rollover is enabled
+            rollover_enabled = get_session_management_setting("enable_rollover", False)
+            if not rollover_enabled:
+                time.sleep(60)  # Check every minute
+                continue
+
+            session = get_session()
+            if not session:
+                time.sleep(60)
+                continue
+
+            # Get rollover thresholds
+            rollover_hours = get_session_management_setting("rollover_time_hours", 24)
+            rollover_count = get_session_management_setting("rollover_transcript_count", 10000)
+            archive_old = get_session_management_setting("archive_old_sessions", False)
+            archive_age_days = get_session_management_setting("archive_age_days", 30)
+
+            # Check time-based rollover
+            created_at = datetime.fromisoformat(session.created_at)
+            elapsed_seconds = (datetime.now() - created_at).total_seconds()
+            time_exceeded = (rollover_hours and elapsed_seconds > rollover_hours * 3600)
+
+            # Check count-based rollover
+            transcript_count = len(session.transcripts)
+            count_exceeded = (rollover_count and transcript_count >= rollover_count)
+
+            if time_exceeded or count_exceeded:
+                trigger = "time" if time_exceeded else "count"
+                logger.info(f"Session rollover triggered by {trigger}: {session.name}")
+                print(f"\n📋 Session rollover triggered ({trigger}): {session.name}")
+
+                # Save current session
+                try:
+                    save_session(session)
+                    logger.info(f"Session saved before rollover: {session.name}")
+                except Exception as e:
+                    logger.error(f"Failed to save session before rollover: {e}")
+
+                # Archive if enabled
+                if archive_old:
+                    try:
+                        if archive_session(session.name):
+                            logger.info(f"Session archived: {session.name}")
+                            print(f"📦 Archived: {session.name}")
+                    except Exception as e:
+                        logger.error(f"Failed to archive session: {e}")
+
+                # Create new session with timestamp name
+                new_session_name = f"Session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                try:
+                    new_session = init_session(session_name=new_session_name)
+                    save_session(new_session)
+                    logger.info(f"New session created after rollover: {new_session_name}")
+                    print(f"📁 New session: {new_session_name}")
+                except Exception as e:
+                    logger.error(f"Failed to create new session after rollover: {e}")
+
+            # Periodically clean up old sessions (check hourly)
+            if archive_old and hasattr(session_rollover_loop, "last_cleanup"):
+                if time.time() - session_rollover_loop.last_cleanup > 3600:
+                    try:
+                        cleanup_old_sessions(archive_age_days)
+                        session_rollover_loop.last_cleanup = time.time()
+                    except Exception as e:
+                        logger.warning(f"Scheduled cleanup failed: {e}")
+            elif archive_old:
+                session_rollover_loop.last_cleanup = time.time()
+
+            time.sleep(60)  # Check every minute
+
+        except Exception as e:
+            logger.error(f"Session rollover monitor error: {e}")
+            time.sleep(60)
+
+    logger.info("Session rollover monitor stopped")
+
+
 def boot_app():
     """Initialize the application (model loading, speaker model, etc.)."""
     global speaker_model
@@ -505,6 +599,12 @@ def boot_app():
         
         threading.Thread(target=autosave_loop, daemon=True).start()
         print(f"📁 Session will auto-save.")
+
+    # Session rollover monitor
+    rollover_enabled = get_session_management_setting("enable_rollover", False)
+    if rollover_enabled:
+        threading.Thread(target=session_rollover_loop, daemon=True).start()
+        print(f"⏱️  Session rollover monitoring enabled.")
 
 
 def run_input_source():

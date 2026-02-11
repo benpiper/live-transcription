@@ -203,3 +203,41 @@ class SaveSessionResponse(BaseModel):
     """Response after saving a session."""
     saved: bool = Field(..., description="Whether the session was successfully saved")
     path: str = Field(..., description="Path to the saved session file")
+
+
+class ArchiveSessionResponse(BaseModel):
+    """Response after archiving a session."""
+    name: str = Field(..., description="Session name that was archived")
+    archived: bool = Field(..., description="Whether the session was successfully archived")
+    path: str = Field(..., description="Path to the archived session file")
+
+
+class RestoreSessionResponse(BaseModel):
+    """Response after restoring a session from archive."""
+    name: str = Field(..., description="Session name that was restored")
+    restored: bool = Field(..., description="Whether the session was successfully restored")
+    path: str = Field(..., description="Path to the restored session file")
+
+
+class SessionRolloverStatus(BaseModel):
+    """Session rollover timer status."""
+    current_session_name: Optional[str] = Field(None, description="Current active session name")
+    created_at: Optional[str] = Field(None, description="Session creation timestamp")
+    transcript_count: int = Field(..., description="Number of transcripts in current session")
+    time_since_creation_seconds: float = Field(..., description="Seconds elapsed since session creation")
+    hours_until_rollover: Optional[float] = Field(None, description="Hours until time-based rollover (if enabled)")
+    transcripts_until_rollover: Optional[int] = Field(None, description="Transcripts remaining before count-based rollover (if enabled)")
+    will_rollover_by: Optional[Literal["time", "count"]] = Field(None, description="What will trigger rollover: 'time', 'count', or None")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "current_session_name": "Morning Shift",
+                "created_at": "2026-02-08T08:00:00",
+                "transcript_count": 5234,
+                "time_since_creation_seconds": 28800,
+                "hours_until_rollover": 19.2,
+                "transcripts_until_rollover": 4766,
+                "will_rollover_by": None
+            }
+        }

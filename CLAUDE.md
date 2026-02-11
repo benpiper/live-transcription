@@ -238,6 +238,70 @@ Sessions are stored as JSON files in `sessions/` directory:
 
 REST API endpoints: `/api/sessions`, `/api/sessions/{name}`, `/api/sessions/{name}/save`, etc.
 
+### Session Rollover and Archive Management
+
+The system supports automatic session rollover and archiving to prevent unbounded session growth on long-running deployments.
+
+**Configuration** (in `config.json`):
+```json
+{
+  "session_management": {
+    "enable_rollover": false,              // Enable automatic session rollover
+    "rollover_time_hours": 24,             // Rollover after N hours
+    "rollover_transcript_count": 10000,    // Rollover after N transcripts
+    "enable_archiving": false,             // Enable archiving
+    "archive_dir": "archive",              // Archive folder name
+    "archive_old_sessions": false,         // Archive sessions when rolling over
+    "archive_age_days": 30                 // Auto-archive sessions older than N days
+  }
+}
+```
+
+**How It Works:**
+
+1. **Session Rollover**: When enabled, a background daemon thread monitors the current session and triggers rollover when either:
+   - Time threshold exceeded: Session running for `rollover_time_hours`
+   - Count threshold exceeded: Session has `rollover_transcript_count` transcripts
+   - Whichever limit is hit first determines rollover
+
+2. **Archiving**: When rollover is triggered with `archive_old_sessions=true`:
+   - Current session is saved
+   - Session is moved to `sessions/archive/` folder
+   - New session is created with timestamp name
+   - Old archived sessions are preserved for recovery
+
+3. **Cleanup**: If archiving is enabled, stale sessions are auto-archived:
+   - Sessions older than `archive_age_days` are moved to archive
+   - Checked hourly during normal operation
+   - Keeps active sessions folder clean for long deployments
+
+**API Endpoints:**
+
+- `GET /api/sessions/archived` - List archived sessions
+- `POST /api/sessions/{name}/archive` - Manually archive a session
+- `POST /api/sessions/{name}/restore` - Restore a session from archive
+- `GET /api/session/rollover-status` - Get rollover timer information
+
+**Usage:**
+
+```bash
+# Enable rollover with 12-hour intervals
+python3 real_time_transcription.py --session "Dispatch" --web --config config.json
+# config.json has: "enable_rollover": true, "rollover_time_hours": 12
+
+# Monitor rollover status via API
+curl http://localhost:8000/api/session/rollover-status
+
+# Manually archive a session
+curl -X POST http://localhost:8000/api/sessions/Morning\ Shift/archive
+
+# Restore an archived session
+curl -X POST http://localhost:8000/api/sessions/Morning\ Shift/restore
+
+# List archived sessions
+curl http://localhost:8000/api/sessions/archived
+```
+
 ## Common Patterns
 
 ### Adding New Config Settings

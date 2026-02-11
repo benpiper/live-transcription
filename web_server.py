@@ -25,6 +25,9 @@ from models import (
     DeleteSessionResponse,
     SessionComparisonRequest,
     SessionComparisonResponse,
+    ArchiveSessionResponse,
+    RestoreSessionResponse,
+    SessionRolloverStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -349,6 +352,87 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
             return {"deleted": True}
         else:
             raise HTTPException(status_code=404, detail=f"Session not found: {name}")
+
+    @app.get("/api/sessions/archived", response_model=SessionListResponse, tags=["sessions"])
+    async def list_archived_sessions_endpoint():
+        """
+        List all archived sessions.
+
+        Returns metadata for all archived sessions including name, creation time, and transcript count.
+        Sessions are sorted by most recently updated first.
+        """
+        from session import list_archived_sessions
+        return {"sessions": list_archived_sessions()}
+
+    @app.post("/api/sessions/{name}/archive", response_model=ArchiveSessionResponse, tags=["sessions"])
+    async def archive_session_endpoint(name: str):
+        """
+        Archive a saved session.
+
+        Moves a session from the active sessions folder to the archive folder.
+        Archived sessions are preserved but separated from active sessions.
+
+        **Parameters:**
+        - `name`: Session name to archive
+
+        **Raises:**
+        - 404: Session not found
+        """
+        from session import archive_session, SESSIONS_DIR
+        from pathlib import Path
+
+        archived = archive_session(name)
+        if archived:
+            safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in name)
+            archive_path = SESSIONS_DIR / "archive" / f"{safe_name}.json"
+            return {
+                "name": name,
+                "archived": True,
+                "path": str(archive_path)
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Session not found: {name}")
+
+    @app.post("/api/sessions/{name}/restore", response_model=RestoreSessionResponse, tags=["sessions"])
+    async def restore_session_endpoint(name: str):
+        """
+        Restore an archived session.
+
+        Moves a session from the archive folder back to the active sessions folder.
+
+        **Parameters:**
+        - `name`: Session name to restore
+
+        **Raises:**
+        - 404: Archived session not found
+        """
+        from session import restore_session, SESSIONS_DIR
+
+        restored = restore_session(name)
+        if restored:
+            safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in name)
+            file_path = SESSIONS_DIR / f"{safe_name}.json"
+            return {
+                "name": name,
+                "restored": True,
+                "path": str(file_path)
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Archived session not found: {name}")
+
+    @app.get("/api/session/rollover-status", response_model=SessionRolloverStatus, tags=["sessions"])
+    async def get_rollover_status():
+        """
+        Get the current session's rollover timer status.
+
+        Returns information about rollover thresholds and time remaining before automatic session rollover.
+        Useful for monitoring deployment health and predicting when sessions will rotate.
+
+        If no session is active, returns default zero values.
+        """
+        from session import get_session_rollover_status
+
+        return get_session_rollover_status()
 
     @app.post("/api/sessions/compare", response_model=SessionComparisonResponse, tags=["sessions"])
     async def compare_sessions_endpoint(request: SessionComparisonRequest):

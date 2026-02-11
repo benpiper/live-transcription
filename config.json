@@ -98,5 +98,14 @@
         "noise_reduction_prop_decrease": 1.0,
         "normalization_method": "peak",
         "rms_target_level": 0.1
+    },
+    "session_management": {
+        "enable_rollover": true,
+        "rollover_time_hours": 24,
+        "rollover_transcript_count": 10000,
+        "enable_archiving": true,
+        "archive_dir": "archive",
+        "archive_old_sessions": false,
+        "archive_age_days": 30
     }
 }
