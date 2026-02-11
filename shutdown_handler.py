@@ -6,6 +6,7 @@ session persistence, and WebSocket connection closure before exit.
 """
 
 import signal
+import sys
 import logging
 import threading
 from typing import Callable, Optional
@@ -40,6 +41,9 @@ def register_shutdown_handlers(
                 cleanup_callback()
             except Exception as e:
                 logger.error(f"Error during cleanup callback: {e}")
+
+        # Exit the process
+        sys.exit(0)
 
     # Register handlers for both SIGTERM and SIGINT
     signal.signal(signal.SIGTERM, _shutdown_handler)
