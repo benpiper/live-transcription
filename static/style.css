@@ -1159,3 +1159,261 @@ canvas {
         opacity: 0.7;
     }
 }
+
+/* Comparison Section Styles */
+.comparison-section {
+    padding: clamp(16px, 3vw, 20px);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.comparison-section h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.session-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.session-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.session-checkbox:hover {
+    background-color: var(--glass);
+}
+
+.session-checkbox input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.session-checkbox label {
+    flex: 1;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.session-badge {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.session-badge.session-0 {
+    background-color: #3b82f6;
+}
+
+.session-badge.session-1 {
+    background-color: #a855f7;
+}
+
+.session-badge.session-2 {
+    background-color: #f97316;
+}
+
+.comparison-mode {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.comparison-mode label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.radio-group {
+    display: flex;
+    gap: 12px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.radio-label input[type="radio"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.comparison-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--glass);
+    border-radius: 8px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+}
+
+.stat-row label {
+    font-weight: 600;
+}
+
+.comparison-results {
+    padding-top: 12px;
+}
+
+.comparison-results.hidden {
+    display: none;
+}
+
+.side-by-side-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+}
+
+.comparison-column {
+    border-left: 4px solid;
+    border-radius: 6px;
+    background: var(--glass);
+    overflow-y: auto;
+    max-height: 500px;
+}
+
+.comparison-column.session-0 {
+    border-left-color: #3b82f6;
+}
+
+.comparison-column.session-1 {
+    border-left-color: #a855f7;
+}
+
+.comparison-column.session-2 {
+    border-left-color: #f97316;
+}
+
+.column-header {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 0.9rem;
+    background: var(--glass);
+    position: sticky;
+    top: 0;
+}
+
+.comparison-transcript {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.comparison-transcript:last-child {
+    border-bottom: none;
+}
+
+.comparison-timestamp {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 4px;
+}
+
+.comparison-speaker {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.comparison-text {
+    color: var(--text-main);
+}
+
+.merged-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.merged-transcript-item {
+    padding: 12px;
+    border-left: 4px solid;
+    border-radius: 4px;
+    background: var(--glass);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.merged-transcript-item.session-0 {
+    border-left-color: #3b82f6;
+}
+
+.merged-transcript-item.session-1 {
+    border-left-color: #a855f7;
+}
+
+.merged-transcript-item.session-2 {
+    border-left-color: #f97316;
+}
+
+.merged-session-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+.merged-session-tag.session-0 {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.merged-session-tag.session-1 {
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+}
+
+.merged-session-tag.session-2 {
+    background: rgba(249, 115, 22, 0.2);
+    color: #f97316;
+}
+
+@media (max-width: 768px) {
+    .side-by-side-container {
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-column {
+        max-height: 300px;
+    }
+}

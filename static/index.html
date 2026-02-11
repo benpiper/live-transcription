@@ -133,6 +133,54 @@
                     </div>
                 </section>
 
+                <section class="comparison-section">
+                    <div class="section-header">
+                        <h3>Compare Sessions</h3>
+                        <div class="header-actions">
+                            <button id="clear-comparison" class="btn-text" style="display: none;">Clear</button>
+                        </div>
+                    </div>
+                    <div id="comparison-content">
+                        <div id="session-selector" class="session-selector">
+                            <div class="session-list">
+                                <!-- Session checkboxes will appear here -->
+                            </div>
+                            <div class="comparison-mode">
+                                <label>Mode:</label>
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" name="comparison-mode" value="merged" checked>
+                                        Merged
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" name="comparison-mode" value="side-by-side">
+                                        Side-by-Side
+                                    </label>
+                                </div>
+                            </div>
+                            <button id="run-comparison" class="btn-secondary full-width" disabled>
+                                Compare Sessions
+                            </button>
+                        </div>
+                        <div id="comparison-results" class="comparison-results hidden">
+                            <div class="comparison-stats">
+                                <div class="stat-row">
+                                    <label>Transcripts:</label>
+                                    <span id="comp-transcript-count">0</span>
+                                </div>
+                                <div class="stat-row">
+                                    <label>Speakers:</label>
+                                    <span id="comp-speaker-count">0</span>
+                                </div>
+                                <div class="stat-row">
+                                    <label>Time Range:</label>
+                                    <span id="comp-time-range">---</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </aside>
         </main>
     </div>

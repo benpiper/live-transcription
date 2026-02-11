@@ -11,8 +11,21 @@ import queue
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
+
+from models import (
+    HealthCheckResponse,
+    CurrentSessionResponse,
+    SessionListResponse,
+    SessionMetadata,
+    SessionFull,
+    SessionCreateResponse,
+    SaveSessionResponse,
+    DeleteSessionResponse,
+    SessionComparisonRequest,
+    SessionComparisonResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,15 +154,15 @@ async def websocket_broadcaster():
 def create_app(boot_callback=None, input_callback=None) -> FastAPI:
     """
     Create and configure the FastAPI application.
-    
+
     Args:
         boot_callback: Optional function to call on startup (loads models, etc.)
         input_callback: Optional function to start audio input
-        
+
     Returns:
         Configured FastAPI application
     """
-    
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Manage application lifecycle."""
@@ -173,20 +186,53 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
             await broadcast_task
         except asyncio.CancelledError:
             pass
+
+    tags_metadata = [
+        {
+            "name": "health",
+            "description": "Health and status checks"
+        },
+        {
+            "name": "sessions",
+            "description": "Session management endpoints"
+        },
+        {
+            "name": "realtime",
+            "description": "Real-time WebSocket streaming"
+        }
+    ]
+
+    app = FastAPI(
+        title="Live Transcription API",
+        version="1.0.0",
+        description="Real-time audio transcription system with speaker diarization, multi-session support, and comparison features.",
+        lifespan=lifespan,
+        openapi_tags=tags_metadata
+    )
     
-    app = FastAPI(lifespan=lifespan)
-    
-    @app.get("/ping")
+    @app.get("/ping", response_model=HealthCheckResponse, tags=["health"])
     async def ping():
-        """Health check endpoint."""
+        """
+        Health check endpoint.
+
+        Returns the server status and number of active WebSocket connections.
+        """
         return {
-            "status": "ok", 
+            "status": "ok",
             "connections": len(ws_manager.active_connections)
         }
-    
-    @app.websocket("/ws")
+
+    @app.websocket("/ws", name="websocket")
     async def websocket_endpoint(websocket: WebSocket):
-        """WebSocket endpoint for real-time updates."""
+        """
+        WebSocket endpoint for real-time transcription updates.
+
+        Streams two types of messages:
+        - **JSON**: Transcript data with speaker, confidence, and timestamps
+        - **Binary**: Raw audio chunks (Float32Array) for visualization
+
+        The connection stays open until the client disconnects or the server shuts down.
+        """
         logger.info("New WebSocket client connecting...")
         print("New WebSocket client connecting...")
         await ws_manager.connect(websocket)
@@ -196,11 +242,15 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
                 await websocket.receive_text()
         except WebSocketDisconnect:
             ws_manager.disconnect(websocket)
-    
+
     # Session API endpoints
-    @app.get("/api/session/current")
+    @app.get("/api/session/current", response_model=CurrentSessionResponse, tags=["sessions"])
     async def get_current_session():
-        """Get the current active session's data."""
+        """
+        Get the current active session's data.
+
+        Returns the currently active transcription session or an empty response if none is active.
+        """
         from session import get_session
         session = get_session()
         if session:
@@ -212,53 +262,125 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
                 "transcripts": session.transcripts
             }
         return {"active": False}
-    
-    @app.get("/api/sessions")
+
+    @app.get("/api/sessions", response_model=SessionListResponse, tags=["sessions"])
     async def list_sessions_endpoint():
-        """List all saved sessions."""
+        """
+        List all saved sessions.
+
+        Returns metadata for all saved sessions including name, creation time, and transcript count.
+        Sessions are sorted by most recently updated first.
+        """
         from session import list_sessions
         return {"sessions": list_sessions()}
-    
-    @app.post("/api/sessions")
+
+    @app.post("/api/sessions", response_model=SessionCreateResponse, tags=["sessions"])
     async def create_session_endpoint(name: str = None):
-        """Create a new session."""
+        """
+        Create a new session.
+
+        Creates and saves a new transcription session with an optional custom name.
+        If no name is provided, a timestamp-based name is auto-generated.
+
+        **Parameters:**
+        - `name`: Optional session name (defaults to Session_YYYYMMDD_HHMMSS)
+        """
         from session import init_session, save_session
         session = init_session(session_name=name)
         save_session(session)
         return {"name": session.name, "created_at": session.created_at}
-    
-    @app.get("/api/sessions/{name}")
+
+    @app.get("/api/sessions/{name}", response_model=SessionFull, tags=["sessions"])
     async def get_session_endpoint(name: str):
-        """Get a session's transcripts."""
+        """
+        Get a session's full data including all transcripts.
+
+        Retrieves a saved session by name and returns all transcripts with metadata.
+
+        **Parameters:**
+        - `name`: Session name to retrieve
+
+        **Raises:**
+        - 404: Session not found
+        """
         from session import load_session_from_file
         try:
             session = load_session_from_file(name)
             return session.to_dict()
         except FileNotFoundError:
-            from fastapi import HTTPException
             raise HTTPException(status_code=404, detail=f"Session not found: {name}")
-    
-    @app.post("/api/sessions/{name}/save")
+
+    @app.post("/api/sessions/{name}/save", response_model=SaveSessionResponse, tags=["sessions"])
     async def save_session_endpoint(name: str):
-        """Save the current session."""
+        """
+        Save the current active session with a new name.
+
+        Persists the currently active session to disk with the specified name.
+
+        **Parameters:**
+        - `name`: New session name
+
+        **Raises:**
+        - 400: No active session
+        """
         from session import get_session, save_session
         session = get_session()
         if not session:
-            from fastapi import HTTPException
             raise HTTPException(status_code=400, detail="No active session")
         path = save_session(session, name)
         return {"saved": True, "path": path}
-    
-    @app.delete("/api/sessions/{name}")
+
+    @app.delete("/api/sessions/{name}", response_model=DeleteSessionResponse, tags=["sessions"])
     async def delete_session_endpoint(name: str):
-        """Delete a saved session."""
+        """
+        Delete a saved session.
+
+        Permanently removes a session file from disk.
+
+        **Parameters:**
+        - `name`: Session name to delete
+
+        **Raises:**
+        - 404: Session not found
+        """
         from session import delete_session
         deleted = delete_session(name)
         if deleted:
             return {"deleted": True}
         else:
-            from fastapi import HTTPException
             raise HTTPException(status_code=404, detail=f"Session not found: {name}")
+
+    @app.post("/api/sessions/compare", response_model=SessionComparisonResponse, tags=["sessions"])
+    async def compare_sessions_endpoint(request: SessionComparisonRequest):
+        """
+        Compare multiple sessions side-by-side or merged.
+
+        Compares 2-3 sessions and returns either:
+        - **merged**: Chronological timeline of all transcripts sorted by timestamp
+        - **side-by-side**: Transcripts grouped by session
+
+        Optional speaker filtering limits results to specific speakers.
+
+        **Parameters:**
+        - `session_names`: List of 2-3 session names to compare
+        - `mode`: Comparison mode ('merged' or 'side-by-side', default: 'merged')
+        - `speaker_filter`: Optional list of speaker names to include
+
+        **Raises:**
+        - 400: Invalid number of sessions or sessions not found
+        - 422: Invalid request format
+        """
+        from comparison import compare_sessions
+
+        try:
+            result = compare_sessions(
+                request.session_names,
+                request.mode,
+                request.speaker_filter
+            )
+            return result
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     
     # Mount static files last (catch-all)
     app.mount("/", StaticFiles(directory="static", html=True), name="static")

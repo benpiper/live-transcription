@@ -1425,3 +1425,358 @@ if (scrollLockBtn) {
         }
     });
 }
+
+// ===== COMPARISON SECTION =====
+
+let comparisonMode = false;
+let selectedSessions = new Set();
+const sessionColors = ['session-0', 'session-1', 'session-2'];
+
+/**
+ * Load available sessions for comparison selection
+ */
+async function loadSessionsForComparison() {
+    try {
+        const response = await fetch('/api/sessions');
+        const data = await response.json();
+        const sessions = data.sessions || [];
+
+        const sessionList = document.querySelector('.session-list');
+        if (!sessionList) return;
+
+        sessionList.innerHTML = '';
+
+        sessions.forEach((session, index) => {
+            const checkbox = document.createElement('div');
+            checkbox.className = 'session-checkbox';
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = `session-${index}`;
+            input.value = session.name;
+            input.disabled = index >= 3; // Max 3 sessions
+
+            input.addEventListener('change', () => {
+                if (input.checked && selectedSessions.size >= 3) {
+                    input.checked = false;
+                    alert('Maximum 3 sessions can be compared at a time');
+                    return;
+                }
+
+                if (input.checked) {
+                    selectedSessions.add(session.name);
+                } else {
+                    selectedSessions.delete(session.name);
+                }
+
+                updateComparisonButtonState();
+            });
+
+            const label = document.createElement('label');
+            label.htmlFor = `session-${index}`;
+            label.innerHTML = `<span class="session-badge ${sessionColors[index]}"></span>${session.name}`;
+
+            const transcriptCount = document.createElement('span');
+            transcriptCount.className = 'text-muted';
+            transcriptCount.style.fontSize = '0.75rem';
+            transcriptCount.textContent = `(${session.transcript_count})`;
+
+            checkbox.appendChild(input);
+            checkbox.appendChild(label);
+            checkbox.appendChild(transcriptCount);
+            sessionList.appendChild(checkbox);
+        });
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+    }
+}
+
+/**
+ * Update the Compare button state based on selected sessions
+ */
+function updateComparisonButtonState() {
+    const runBtn = document.getElementById('run-comparison');
+    if (runBtn) {
+        runBtn.disabled = selectedSessions.size < 2;
+    }
+}
+
+/**
+ * Run comparison and fetch results
+ */
+async function runComparison() {
+    if (selectedSessions.size < 2) {
+        alert('Select at least 2 sessions to compare');
+        return;
+    }
+
+    const mode = document.querySelector('input[name="comparison-mode"]:checked')?.value || 'merged';
+
+    try {
+        const response = await fetch('/api/sessions/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_names: Array.from(selectedSessions),
+                mode: mode,
+                speaker_filter: null
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            alert('Comparison failed: ' + (error.detail || 'Unknown error'));
+            return;
+        }
+
+        const result = await response.json();
+        displayComparisonResults(result);
+    } catch (error) {
+        console.error('Comparison error:', error);
+        alert('Failed to compare sessions');
+    }
+}
+
+/**
+ * Display comparison results and switch to comparison mode
+ */
+function displayComparisonResults(result) {
+    comparisonMode = true;
+
+    // Update status badge
+    const statusBadge = document.getElementById('status-badge');
+    if (statusBadge) {
+        statusBadge.textContent = 'Comparing Sessions';
+        statusBadge.classList.remove('connected');
+    }
+
+    // Hide session selector, show results and clear button
+    const selector = document.getElementById('session-selector');
+    const results = document.getElementById('comparison-results');
+    const clearBtn = document.getElementById('clear-comparison');
+
+    if (selector) selector.style.display = 'none';
+    if (results) results.classList.remove('hidden');
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+
+    // Update stats
+    const stats = result.stats || {};
+    document.getElementById('comp-transcript-count').textContent = stats.total_transcripts || 0;
+    document.getElementById('comp-speaker-count').textContent = stats.speaker_count || 0;
+
+    if (stats.time_range) {
+        document.getElementById('comp-time-range').textContent =
+            `${stats.time_range.earliest} → ${stats.time_range.latest}`;
+    }
+
+    // Render results based on mode
+    if (result.mode === 'merged') {
+        renderMergedComparison(result.results, Array.from(selectedSessions));
+    } else {
+        renderSideBySideComparison(result.results.by_session, Array.from(selectedSessions));
+    }
+}
+
+/**
+ * Render merged (chronological) comparison
+ */
+function renderMergedComparison(results, sessionNames) {
+    const container = document.getElementById('transcript-feed');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // Create session index map
+    const sessionIndexMap = {};
+    sessionNames.forEach((name, idx) => {
+        sessionIndexMap[name] = idx;
+    });
+
+    const transcripts = results.transcripts || [];
+
+    // If no transcripts, show message
+    if (transcripts.length === 0) {
+        container.innerHTML = '<div class="placeholder">No transcripts to display</div>';
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    transcripts.forEach(transcript => {
+        const sessionIdx = sessionIndexMap[transcript.session_name] || 0;
+        const sessionClass = sessionColors[sessionIdx];
+
+        const item = createComparisonTranscriptElement(
+            transcript,
+            transcript.session_name,
+            sessionClass,
+            'merged'
+        );
+
+        fragment.appendChild(item);
+    });
+
+    container.appendChild(fragment);
+}
+
+/**
+ * Render side-by-side comparison
+ */
+function renderSideBySideComparison(bySession, sessionNames) {
+    const container = document.getElementById('transcript-feed');
+    if (!container) return;
+
+    // Create wrapper
+    container.innerHTML = '<div class="side-by-side-container"></div>';
+    const gridContainer = container.querySelector('.side-by-side-container');
+
+    sessionNames.forEach((sessionName, idx) => {
+        const sessionClass = sessionColors[idx];
+        const column = document.createElement('div');
+        column.className = `comparison-column ${sessionClass}`;
+
+        // Column header
+        const header = document.createElement('div');
+        header.className = 'column-header';
+        header.textContent = sessionName;
+        column.appendChild(header);
+
+        // Transcripts
+        const transcripts = bySession[sessionName] || [];
+
+        if (transcripts.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.padding = '20px';
+            empty.style.textAlign = 'center';
+            empty.className = 'text-muted';
+            empty.textContent = 'No transcripts';
+            column.appendChild(empty);
+        } else {
+            const fragment = document.createDocumentFragment();
+
+            transcripts.forEach(transcript => {
+                const item = createComparisonTranscriptElement(
+                    transcript,
+                    sessionName,
+                    sessionClass,
+                    'side-by-side'
+                );
+                fragment.appendChild(item);
+            });
+
+            column.appendChild(fragment);
+        }
+
+        gridContainer.appendChild(column);
+    });
+}
+
+/**
+ * Create a comparison transcript element
+ */
+function createComparisonTranscriptElement(transcript, sessionName, sessionClass, mode) {
+    const container = document.createElement('div');
+
+    if (mode === 'merged') {
+        container.className = `merged-transcript-item ${sessionClass}`;
+
+        // Session tag
+        const tag = document.createElement('span');
+        tag.className = `merged-session-tag ${sessionClass}`;
+        tag.textContent = sessionName;
+        container.appendChild(tag);
+
+        // Timestamp
+        const timestamp = document.createElement('div');
+        timestamp.className = 'comparison-timestamp';
+        timestamp.textContent = transcript.timestamp || '';
+        container.appendChild(timestamp);
+
+        // Speaker
+        if (transcript.speaker) {
+            const speaker = document.createElement('div');
+            speaker.className = 'comparison-speaker';
+            speaker.textContent = transcript.speaker;
+            container.appendChild(speaker);
+        }
+
+        // Text
+        const text = document.createElement('div');
+        text.className = 'comparison-text';
+        text.textContent = transcript.text || '';
+        container.appendChild(text);
+    } else {
+        // Side-by-side mode
+        container.className = 'comparison-transcript';
+
+        // Timestamp
+        const timestamp = document.createElement('div');
+        timestamp.className = 'comparison-timestamp';
+        timestamp.textContent = transcript.timestamp || '';
+        container.appendChild(timestamp);
+
+        // Speaker
+        if (transcript.speaker) {
+            const speaker = document.createElement('div');
+            speaker.className = 'comparison-speaker';
+            speaker.textContent = transcript.speaker;
+            container.appendChild(speaker);
+        }
+
+        // Text
+        const text = document.createElement('div');
+        text.className = 'comparison-text';
+        text.textContent = transcript.text || '';
+        container.appendChild(text);
+    }
+
+    return container;
+}
+
+/**
+ * Clear comparison and return to live view
+ */
+function clearComparison() {
+    comparisonMode = false;
+    selectedSessions.clear();
+
+    // Update status badge
+    const statusBadge = document.getElementById('status-badge');
+    if (statusBadge) {
+        statusBadge.textContent = ws && ws.readyState === WebSocket.OPEN ? 'Connected' : 'Disconnected';
+        statusBadge.classList.toggle('connected', ws && ws.readyState === WebSocket.OPEN);
+    }
+
+    // Show session selector, hide results and clear button
+    const selector = document.getElementById('session-selector');
+    const results = document.getElementById('comparison-results');
+    const clearBtn = document.getElementById('clear-comparison');
+
+    if (selector) selector.style.display = 'flex';
+    if (results) results.classList.add('hidden');
+    if (clearBtn) clearBtn.style.display = 'none';
+
+    // Uncheck all session checkboxes
+    document.querySelectorAll('.session-checkbox input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+
+    // Clear transcript feed
+    transcriptFeed.innerHTML = '<div class="placeholder">Waiting for incoming audio...</div>';
+
+    updateComparisonButtonState();
+}
+
+// Initialize comparison UI
+loadSessionsForComparison();
+
+// Event listeners for comparison
+document.getElementById('run-comparison')?.addEventListener('click', runComparison);
+document.getElementById('clear-comparison')?.addEventListener('click', clearComparison);
+
+// Refresh sessions list when tab becomes visible
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !comparisonMode) {
+        loadSessionsForComparison();
+    }
+});
