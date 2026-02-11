@@ -43,6 +43,7 @@ from config import TRANSCRIPTION_CONFIG, load_config, get_setting, get_session_m
 from transcription_engine import setup_cuda_paths, load_model, transcribe_chunk, SAMPLE_RATE
 from speaker_manager import speaker_manager, MIN_SPEAKER_ID_SAMPLES
 from audio_processing import is_speech
+from audio_buffer import audio_buffer
 
 # Setup CUDA before importing web server (which imports ctranslate2)
 setup_cuda_paths()
@@ -74,27 +75,36 @@ SILENCE_WARNING_THRESHOLD = 30 * 60  # 30 minutes in seconds
 def audio_callback(indata, frames, time_info, status):
     """Callback function to capture audio data from the microphone."""
     global current_volume
-    
+
     if status:
         logger.warning(f"Audio status: {status}")
-    
+
     audio_data = indata[:, 0].copy()
     timestamp = datetime.now()
-    
+
     # Calculate volume for visualization
     current_volume = np.linalg.norm(audio_data) / np.sqrt(len(audio_data))
-    
+
     # Add to transcription queue
     audio_queue.put((timestamp, audio_data))
-    
+
+    # Use Unix timestamp (float) consistently for audio buffer alignment with transcripts
+    now = timestamp.timestamp()
+
+    # Add ALL audio to backend buffer for retrieval (regardless of volume)
+    # This ensures we can retrieve audio for all transcripts, including quiet ones
+    try:
+        audio_buffer.add_chunk(now, audio_data)
+    except Exception as e:
+        logger.debug(f"Audio buffer error: {e}")
+
     # Noise-gated audio broadcast to web clients
     try:
         noise_floor = get_setting("noise_floor", 0.001)
-        now = time.time()
         last_broadcast = getattr(audio_callback, "last_vol_broadcast", 0)
-        
+
         if current_volume >= noise_floor:
-            # Broadcast raw audio when above noise floor
+            # Broadcast raw audio when above noise floor (for visualization)
             audio_broadcast_queue.put_nowait(audio_data.astype(np.float32).tobytes())
             audio_callback.last_vol_broadcast = now
         elif now - last_broadcast > 2.0:
@@ -555,7 +565,12 @@ def boot_app():
     # Log any config validation warnings
     if session.get_config_errors():
         print(f"⚠️  {len(session.get_config_errors())} config warning(s) - see above")
-    
+
+    # Initialize audio buffer with configured window size
+    window_sec = get_setting("audio_buffer_window_sec", 7200)
+    audio_buffer.set_window_size(window_sec)
+    logger.info(f"Audio buffer initialized with {window_sec}s window ({window_sec/3600:.1f} hours)")
+
     if args.diarize:
         print("Loading speaker identification model...")
         from speechbrain.inference.speaker import EncoderClassifier

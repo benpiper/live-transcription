@@ -134,7 +134,7 @@ const VOLUME_UPDATE_INTERVAL = 100; // 10fps for volume text updates
 
 console.log("App initializing...");
 
-// IndexedDB Setup for persistent audio
+// IndexedDB Setup (for future use, settings storage)
 let db;
 const dbRequest = indexedDB.open("TranscriptionDB", 2);
 
@@ -148,7 +148,7 @@ dbRequest.onupgradeneeded = (event) => {
 dbRequest.onsuccess = (event) => {
     db = event.target.result;
     console.log("IndexedDB initialized");
-    // Audio will be matched when loadCurrentSession runs
+    // Audio is now fetched from backend on-demand via API
 };
 
 dbRequest.onerror = (event) => {
@@ -538,11 +538,11 @@ function addTranscriptItem(data, fromSession = false) {
                 offset += chunk.length;
             }
 
-            // We save to DB but DON'T keep it in historyItem.audio to save RAM
+            // Don't keep audio in historyItem to save RAM
+            // Audio is stored in backend buffer, fetched on demand via API
             // historyItem.audio remains null
             item.dataset.id = historyItem.id;
 
-            saveAudioToDB(historyItem.id, combinedAudio);
             pruneHistory();
         }
     }
@@ -813,24 +813,56 @@ document.getElementById('reset-filters').addEventListener('click', () => {
 
 async function downloadSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
-    if (!item) return;
-
-    // Load from DB on demand
-    const audioData = await getAudioFromDB(id);
-    if (!audioData) {
-        console.warn("Audio not found for segment:", id);
+    if (!item) {
+        console.error("Item not found for download:", id);
+        console.log("Available items:", transcriptionHistory.map(h => h.id).slice(-5));
+        alert("Transcript item not found");
         return;
     }
 
-    const wavData = encodeWAV(audioData, 16000);
-    const blob = new Blob([wavData], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
+    console.log("Download item found:", {id: item.id, duration: item.duration, origin_time: item.origin_time, text: item.text.substring(0, 50)});
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `clip_${id.replace('audio-', '')}.wav`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Extract timestamp from segment ID
+    // Format: "audio-{origin_time}" where origin_time is Unix float
+    const originTime = parseFloat(id.replace("audio-", ""));
+    if (isNaN(originTime)) {
+        console.error("Invalid segment ID format:", id);
+        return;
+    }
+
+    // Use transcript's exact duration for download
+    const duration = item.duration || 5.0;  // Fallback to 5s if duration missing
+    const startTime = originTime;
+    const endTime = originTime + duration;
+
+    console.log(`Downloading: id='${id}', origin=${originTime.toFixed(3)}, duration=${duration.toFixed(3)}, range=[${startTime.toFixed(3)}, ${endTime.toFixed(3)}]`);
+
+    try {
+        const response = await fetch(
+            `/api/audio/range?start_time=${startTime}&end_time=${endTime}&format=wav`
+        );
+
+        if (!response.ok) {
+            if (response.status === 400) {
+                alert("Audio not available. This segment is outside the audio buffer window (2 hours).");
+            } else {
+                alert("Failed to download audio segment");
+            }
+            return;
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `clip_${originTime.toFixed(0)}.wav`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+    } catch (error) {
+        console.error("Error downloading audio:", error);
+        alert("Failed to download audio segment");
+    }
 }
 
 function encodeWAV(samples, sampleRate) {
@@ -886,10 +918,10 @@ async function playSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
     if (!item) return;
 
-    // Load from DB on demand
-    const audioData = await getAudioFromDB(id);
-    if (!audioData) {
-        console.warn("No audio data for segment:", id);
+    // Extract timestamp from segment ID
+    const originTime = parseFloat(id.replace("audio-", ""));
+    if (isNaN(originTime)) {
+        console.error("Invalid segment ID format:", id);
         return;
     }
 
@@ -902,7 +934,7 @@ async function playSegment(id) {
         if (activePlaybackSource) {
             try { activePlaybackSource.stop(); } catch (e) { }
         }
-        return; // The onended handler below will clean up UI and state
+        return;
     }
 
     // 2. If something else is playing, stop it first
@@ -921,16 +953,55 @@ async function playSegment(id) {
 
     console.log("Playing back segment:", id);
 
-    // 3. Mute live audio
-    if (!isPlaybackMuted) {
-        liveAudioEnabledBeforePlayback = isAudioEnabled;
-        isPlaybackMuted = true;
-    }
-
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
         btn.innerHTML = '⏸️';
         btn.classList.add('playing');
+    }
+
+    try {
+        // Use transcript's exact duration for playback
+        const duration = item.duration || 5.0;  // Fallback to 5s if duration missing
+        const startTime = originTime;
+        const endTime = originTime + duration;
+
+        const response = await fetch(
+            `/api/audio/range?start_time=${startTime}&end_time=${endTime}&format=raw`
+        );
+
+        if (!response.ok) {
+            if (response.status === 400) {
+                console.warn("Audio not available (outside buffer window)");
+                // Try fallback to rawAudioHistory if available
+                const historyAudio = getAudioFromHistory(originTime);
+                if (historyAudio && historyAudio.length > 0) {
+                    console.log("Using fallback audio from history");
+                    playAudioBuffer(historyAudio, id, btn, context);
+                } else {
+                    alert("Audio not available for playback. This segment is outside the 2-hour buffer window.");
+                }
+            } else {
+                alert("Failed to load audio segment");
+            }
+            return;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const floatData = new Float32Array(arrayBuffer);
+        playAudioBuffer(floatData, id, btn, context);
+
+    } catch (error) {
+        console.error("Error loading audio:", error);
+        alert("Failed to load audio segment");
+    }
+}
+
+// Helper function to play audio from Float32 data
+function playAudioBuffer(audioData, id, btn, context) {
+    // 3. Mute live audio
+    if (!isPlaybackMuted) {
+        liveAudioEnabledBeforePlayback = isAudioEnabled;
+        isPlaybackMuted = true;
     }
 
     const buffer = context.createBuffer(1, audioData.length, 16000);
@@ -960,46 +1031,34 @@ async function playSegment(id) {
     source.start(0);
 }
 
-function saveAudioToDB(id, audioData) {
-    if (!db) return;
-    const transaction = db.transaction(["audioStore"], "readwrite");
-    const store = transaction.objectStore("audioStore");
-    store.put(audioData, id);
-}
+// Fallback: get audio from rawAudioHistory (for recent transcripts within browser buffer)
+function getAudioFromHistory(originTime) {
+    const tolerance = 0.5;  // 500ms tolerance
+    const matches = rawAudioHistory.filter(item => Math.abs(item.timestamp - originTime) < tolerance);
+    if (matches.length === 0) return null;
 
-function getAudioFromDB(id) {
-    return new Promise((resolve) => {
-        if (!db) return resolve(null);
-        const transaction = db.transaction(["audioStore"], "readonly");
-        const store = transaction.objectStore("audioStore");
-        const request = store.get(id);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => resolve(null);
-    });
-}
-
-function deleteAudioFromDB(id) {
-    if (!db) return;
-    const transaction = db.transaction(["audioStore"], "readwrite");
-    const store = transaction.objectStore("audioStore");
-    store.delete(id);
+    // Concatenate matching audio chunks
+    const totalLength = matches.reduce((sum, item) => sum + item.chunk.length, 0);
+    const combined = new Float32Array(totalLength);
+    let offset = 0;
+    for (const item of matches) {
+        combined.set(item.chunk, offset);
+        offset += item.chunk.length;
+    }
+    return combined;
 }
 
 // History Pruning
 function pruneHistory() {
-    // Use saved limit from localStorage or default to 100
+    // Use saved limit from localStorage or default to 250
     const savedLimit = localStorage.getItem('history-limit');
     const limit = savedLimit ? parseInt(savedLimit) : 250;
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
 
-        // Delete audio from IndexedDB if it has a proper ID
-        if (removed.id && !removed.id.startsWith('temp-') && !removed.id.startsWith('live-')) {
-            deleteAudioFromDB(removed.id);
-        }
-
-        // UI Clean up using cached reference
+        // Audio is stored in backend buffer, no local cleanup needed
+        // Just remove UI element if it exists
         if (removed.el) {
             removed.el.remove();
         }

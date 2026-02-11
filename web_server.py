@@ -12,7 +12,10 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+import io
+import numpy as np
 
 from models import (
     HealthCheckResponse,
@@ -111,6 +114,40 @@ def set_queues(json_queue: queue.Queue, audio_queue: queue.Queue, stop_evt: thre
     broadcast_queue = json_queue
     audio_broadcast_queue = audio_queue
     stop_event = stop_evt
+
+
+def create_wav_from_float32(audio_data: np.ndarray, sample_rate: int = 16000) -> bytes:
+    """
+    Convert Float32 numpy array to WAV format bytes (16-bit PCM).
+
+    Args:
+        audio_data: Audio samples as Float32 numpy array (should be in range [-1.0, 1.0])
+        sample_rate: Sample rate in Hz (default 16000)
+
+    Returns:
+        WAV file bytes
+    """
+    import wave
+
+    if audio_data.dtype != np.float32:
+        audio_data = audio_data.astype(np.float32)
+
+    # Create in-memory WAV file
+    wav_buffer = io.BytesIO()
+
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)  # Mono
+        wav_file.setsampwidth(2)  # 16-bit PCM (2 bytes per sample)
+        wav_file.setframerate(sample_rate)
+
+        # Convert Float32 to 16-bit PCM
+        # Clip to [-1.0, 1.0] range and scale to int16 range
+        audio_clipped = np.clip(audio_data, -1.0, 1.0)
+        pcm_int16 = (audio_clipped * 32767).astype(np.int16)
+        wav_file.writeframes(pcm_int16.tobytes())
+
+    wav_buffer.seek(0)
+    return wav_buffer.getvalue()
 
 
 async def websocket_broadcaster():
@@ -465,7 +502,119 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
             return result
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    
+
+    # Audio API endpoints
+    @app.get("/api/audio/buffer-status", tags=["audio"])
+    async def get_audio_buffer_status():
+        """
+        Get current audio buffer state and statistics.
+
+        Returns information about the audio buffer including window size,
+        current data available, and duration of audio stored.
+
+        **Returns:**
+        - `window_size_sec`: Configured time window in seconds
+        - `buffer_size_bytes`: Current total buffer size in bytes
+        - `buffer_size_mb`: Current total buffer size in MB
+        - `oldest_timestamp`: Earliest audio timestamp (Unix float)
+        - `newest_timestamp`: Latest audio timestamp (Unix float)
+        - `num_chunks`: Number of audio chunks in buffer
+        - `duration_available_sec`: Total duration of audio available
+        """
+        try:
+            from audio_buffer import audio_buffer
+            stats = audio_buffer.get_buffer_stats()
+            return stats
+        except Exception as e:
+            logger.error(f"Error getting buffer status: {e}")
+            raise HTTPException(status_code=500, detail="Failed to get buffer status")
+
+    @app.get("/api/audio/range", tags=["audio"])
+    async def get_audio_range(start_time: float, end_time: float, format: str = "wav"):
+        """
+        Retrieve audio for a specific time range.
+
+        Fetches audio data from the backend buffer for the specified time range.
+        Audio outside the configured buffer window is not available.
+
+        **Parameters:**
+        - `start_time`: Start timestamp (Unix float, seconds)
+        - `end_time`: End timestamp (Unix float, seconds)
+        - `format`: Output format - "wav" (default) or "raw" (Float32 bytes)
+
+        **Returns:**
+        - `format=wav`: WAV audio file (audio/wav)
+        - `format=raw`: Raw Float32 audio bytes (application/octet-stream)
+
+        **Raises:**
+        - 400: Invalid time range or no audio available
+        - 500: Internal server error
+        """
+        try:
+            from audio_buffer import audio_buffer
+
+            logger.info(f"Audio range request: [{start_time:.3f}, {end_time:.3f}] format={format}")
+
+            # Validate time range
+            if end_time <= start_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid time range: end_time must be > start_time"
+                )
+
+            # Get audio from buffer
+            try:
+                audio_data = audio_buffer.get_audio_range(start_time, end_time)
+                rms = np.sqrt(np.mean(audio_data**2))
+                max_val = np.max(np.abs(audio_data))
+                logger.info(f"Audio retrieved: {len(audio_data)} samples ({len(audio_data)/16000:.3f}s), rms={rms:.4f}, max={max_val:.4f}")
+
+                # Check if audio is actually silent
+                if rms < 0.0001:
+                    logger.warning(f"WARNING: Retrieved audio is essentially silent (rms={rms:.6f})")
+
+                # Check buffer status
+                stats = audio_buffer.get_buffer_stats()
+                logger.info(f"Buffer stats: {stats['num_chunks']} chunks, duration={stats['duration_available_sec']:.1f}s, oldest={stats.get('oldest_timestamp', '?')}")
+
+            except ValueError as e:
+                logger.warning(f"Audio retrieval failed: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
+
+            # Return in requested format
+            if format.lower() == "wav":
+                # Convert to WAV format
+                sample_rate = 16000
+                wav_bytes = create_wav_from_float32(audio_data, sample_rate)
+                return Response(
+                    content=wav_bytes,
+                    media_type="audio/wav",
+                    headers={
+                        "Content-Disposition": f"attachment; filename=audio_{start_time:.0f}.wav"
+                    }
+                )
+            elif format.lower() == "raw":
+                # Return raw Float32 bytes
+                raw_bytes = audio_data.astype(np.float32).tobytes()
+                return Response(
+                    content=raw_bytes,
+                    media_type="application/octet-stream",
+                    headers={
+                        "Content-Disposition": f"attachment; filename=audio_{start_time:.0f}.raw"
+                    }
+                )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid format: {format}. Use 'wav' or 'raw'."
+                )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error retrieving audio range: {e}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve audio")
+
     # Mount static files last (catch-all)
     app.mount("/", StaticFiles(directory="static", html=True), name="static")
     

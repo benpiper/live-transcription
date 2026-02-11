@@ -97,7 +97,9 @@
         "noise_reduction_stationary": true,
         "noise_reduction_prop_decrease": 1.0,
         "normalization_method": "peak",
-        "rms_target_level": 0.1
+        "rms_target_level": 0.1,
+        "audio_buffer_window_sec": 7200,
+        "audio_buffer_chunk_size_sec": 0.256
     },
     "session_management": {
         "enable_rollover": true,

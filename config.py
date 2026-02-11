@@ -33,7 +33,9 @@ DEFAULT_CONFIG = {
         "diarization_threshold": 0.35,
         "min_speaker_samples": 16000,
         "voice_profiles_dir": "voice_profiles",
-        "voice_match_threshold": 0.7
+        "voice_match_threshold": 0.7,
+        "audio_buffer_window_sec": 7200,
+        "audio_buffer_chunk_size_sec": 0.256
     },
     "session_management": {
         "enable_rollover": False,
@@ -156,6 +158,8 @@ def validate_config() -> list:
         "noise_floor": (int, float),
         "diarization_threshold": (int, float),
         "voice_match_threshold": (int, float),
+        "audio_buffer_window_sec": (int, float),
+        "audio_buffer_chunk_size_sec": (int, float),
         "device": str,
         "model_size": str,
         "compute_type": str,
@@ -181,7 +185,12 @@ def validate_config() -> list:
         
         if settings.get("diarization_threshold", 0.35) < 0 or settings.get("diarization_threshold", 0.35) > 1:
             errors.append("diarization_threshold should be between 0.0 and 1.0")
-        
+
+        if settings.get("audio_buffer_window_sec", 7200) < 300:
+            errors.append("audio_buffer_window_sec must be at least 300 seconds (5 minutes)")
+        if settings.get("audio_buffer_window_sec", 7200) > 86400:
+            errors.append("audio_buffer_window_sec must be at most 86400 seconds (24 hours)")
+
         # Logical constraints
         min_win = settings.get("min_window_sec", 1.0)
         max_win = settings.get("max_window_sec", 5.0)
