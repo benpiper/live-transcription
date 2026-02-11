@@ -7,6 +7,7 @@ session persistence, and WebSocket connection closure before exit.
 
 import signal
 import sys
+import os
 import logging
 import threading
 from typing import Callable, Optional
@@ -42,8 +43,9 @@ def register_shutdown_handlers(
             except Exception as e:
                 logger.error(f"Error during cleanup callback: {e}")
 
-        # Exit the process
-        sys.exit(0)
+        # Force immediate exit to bypass uvicorn's shutdown sequence
+        # os._exit() bypasses all cleanup and immediately terminates the process
+        os._exit(0)
 
     # Register handlers for both SIGTERM and SIGINT
     signal.signal(signal.SIGTERM, _shutdown_handler)
