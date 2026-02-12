@@ -1044,9 +1044,9 @@ function getAudioFromHistory(originTime) {
 
 // History Pruning
 function pruneHistory() {
-    // Use saved limit from localStorage or default to 250
+    // Use saved limit from localStorage or default to 1000 (keeps watchword matches visible longer)
     const savedLimit = localStorage.getItem('history-limit');
-    const limit = savedLimit ? parseInt(savedLimit) : 250;
+    const limit = savedLimit ? parseInt(savedLimit) : 1000;
 
     while (transcriptionHistory.length > limit) {
         const removed = transcriptionHistory.shift();
