@@ -91,10 +91,12 @@ def audio_callback(indata, frames, time_info, status):
     # Use Unix timestamp (float) consistently for audio buffer alignment with transcripts
     now = timestamp.timestamp()
 
-    # Add ALL audio to backend buffer for retrieval (regardless of volume)
-    # This ensures we can retrieve audio for all transcripts, including quiet ones
+    # Add audio to backend buffer only if above noise floor
+    # Avoids wasting buffer space on continuous silence during inactive periods
     try:
-        audio_buffer.add_chunk(now, audio_data)
+        noise_floor = get_setting("noise_floor", 0.001)
+        if current_volume >= noise_floor:
+            audio_buffer.add_chunk(now, audio_data)
     except Exception as e:
         logger.debug(f"Audio buffer error: {e}")
 
