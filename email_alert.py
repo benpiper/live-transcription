@@ -19,6 +19,8 @@ import numpy as np
 import urllib.request
 import ssl
 
+from alert_rules import AlertRuleEngine
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -238,8 +240,11 @@ class EmailAlertTool:
     def __init__(self, config_path="email_config.json"):
         self.config_path = config_path
         self.config = self.load_config()
-        self.last_alerts = {}  # keyword: timestamp
+        self.last_alerts = {}  # keyword: timestamp (legacy)
         self.running = True
+
+        # Initialize alert rule engine
+        self.alert_engine = AlertRuleEngine(self.config)
 
         # Buffers for context and audio
         context_count = self.config["alerts"].get("context_count", 3)
@@ -404,16 +409,31 @@ class EmailAlertTool:
             logger.error(msg)
             return (False, msg)
 
-    def send_email(self, keyword, transcript_data, audio_clip=None):
-        """Send an email alert via SMTP with optional context and audio."""
+    def send_email(self, keyword, transcript_data, audio_clip=None, rule_metadata=None):
+        """
+        Send an email alert via SMTP with optional context and audio.
+
+        Args:
+            keyword: Matched keyword (for backward compatibility)
+            transcript_data: Transcript dict with timestamp, speaker, text, etc.
+            audio_clip: Optional audio clip bytes or file path
+            rule_metadata: Optional dict with rule details (rule_id, description, match_type, tags, etc.)
+        """
         smtp_config = self.config["smtp"]
         alert_config = self.config["alerts"]
 
         timestamp = transcript_data.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         speaker = transcript_data.get("speaker", "Unknown")
         text = transcript_data.get("text", "")
+        confidence = transcript_data.get("confidence")
+        duration = transcript_data.get("duration")
 
-        subject = f"{alert_config.get('subject_prefix', '[Alert]')} {keyword}: {text[:50]}"
+        # Build subject with rule info if available
+        if rule_metadata:
+            rule_desc = rule_metadata.get("description", keyword)
+            subject = f"{alert_config.get('subject_prefix', '[Alert]')} {rule_desc}: {text[:40]}"
+        else:
+            subject = f"{alert_config.get('subject_prefix', '[Alert]')} {keyword}: {text[:50]}"
         if len(text) > 50:
             subject += "..."
 
@@ -425,12 +445,30 @@ class EmailAlertTool:
 
         context_text = "\n".join(context_lines) if context_lines else "No previous context available."
 
+        # Build email body with rule metadata
         body = f"""
         Alert triggered for keyword: {keyword}
+        """
 
+        if rule_metadata:
+            body += f"""
+        Rule: {rule_metadata.get('description', rule_metadata.get('rule_id', keyword))}
+        Match Type: {rule_metadata.get('match_type', 'unknown')}
+        """
+            if rule_metadata.get('tags'):
+                body += f"        Tags: {', '.join(rule_metadata.get('tags', []))}\n"
+
+        body += f"""
         Triggering Line:
         [{timestamp}] {speaker}: {text}
+        """
 
+        if confidence is not None:
+            body += f"        Confidence: {confidence:.3f}\n"
+        if duration is not None:
+            body += f"        Duration: {duration:.2f}s\n"
+
+        body += f"""
         Context:
         {context_text}
 
@@ -488,26 +526,26 @@ class EmailAlertTool:
             if self.retry_queue:
                 self.retry_queue.add_failed_email(keyword, transcript_data, str(e), audio_clip_path)
 
-    def check_keywords(self, text):
-        """Check transcript text for keywords and trigger alerts if not rate-limited."""
-        alert_config = self.config["alerts"]
-        keywords = alert_config.get("keywords", [])
-        rate_limit = alert_config.get("rate_limit_seconds", 300)
-        now = time.time()
-        
-        matched_keywords = []
-        text_lower = text.lower()
-        
-        for kw in keywords:
-            if kw.lower() in text_lower:
-                last_time = self.last_alerts.get(kw, 0)
-                if now - last_time > rate_limit:
-                    matched_keywords.append(kw)
-                    self.last_alerts[kw] = now
-                else:
-                    logger.debug(f"Rate limiting alert for keyword '{kw}'")
-        
-        return matched_keywords
+    def check_keywords(self, text, transcript_data=None):
+        """
+        Check transcript text against alert rules and return matched rules.
+
+        Uses the AlertRuleEngine for advanced pattern matching, context filtering,
+        and deduplication. Backward compatible with legacy keyword config.
+
+        Args:
+            text: Transcript text to check
+            transcript_data: Full transcript dict with speaker, confidence, duration, etc.
+
+        Returns:
+            List of matched rule dicts with rule_id, description, metadata, etc.
+        """
+        if transcript_data is None:
+            transcript_data = {}
+
+        # Use new rule engine
+        matched_rules = self.alert_engine.check_rules(text, transcript_data)
+        return matched_rules
 
     def check_daily_heartbeat(self):
         """Check if daily heartbeat should be sent."""
@@ -743,8 +781,6 @@ class EmailAlertTool:
 
                         if data.get("type") == "transcript":
                             text = data.get("text", "")
-                            matched = self.check_keywords(text)
-
                             origin_time = data.get("origin_time")
                             duration = data.get("duration")
                             timestamp = data.get("timestamp")
@@ -753,8 +789,13 @@ class EmailAlertTool:
                             if origin_time:
                                 self.audio_buffer.sync_with_transcript(origin_time, time.time())
 
-                            for kw in matched:
-                                logger.warning(f"MATCH FOUND: '{kw}' in transcript: {text}")
+                            # Check against alert rules with full transcript context
+                            matched_rules = self.check_keywords(text, transcript_data=data)
+
+                            for rule in matched_rules:
+                                rule_id = rule.get("rule_id", "unknown")
+                                rule_desc = rule.get("description", rule_id)
+                                logger.warning(f"MATCH FOUND: Rule '{rule_id}' ({rule_desc}) in transcript: {text}")
 
                                 audio_clip = None
                                 if attach_audio and origin_time and duration:
@@ -762,7 +803,13 @@ class EmailAlertTool:
                                     padding = audio_config.get("extraction_padding_seconds", 0.5)
                                     audio_clip = self.audio_buffer.extract_clip(origin_time, duration, padding)
 
-                                self.send_email(kw, data, audio_clip=audio_clip)
+                                # Send email with rule metadata
+                                self.send_email(
+                                    keyword=rule.get("pattern", rule_id),
+                                    transcript_data=data,
+                                    audio_clip=audio_clip,
+                                    rule_metadata=rule
+                                )
 
                             # Add to history for context
                             self.transcript_history.append(data)
