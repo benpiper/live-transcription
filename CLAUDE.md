@@ -125,6 +125,7 @@ Key tunable settings:
 - `diarization_threshold`: Speaker clustering sensitivity (lower = fewer speakers)
 - `min_window_sec`/`max_window_sec`: Timing for silence-aware chunking
 - `initial_prompt`: Domain context for Whisper (e.g., "Emergency dispatch radio")
+- `merge_timeout_ms`: Time window (milliseconds) for merging consecutive segments from same speaker (default: 500ms, set to 0 to disable merging)
 
 ### CUDA Setup
 
@@ -321,6 +322,44 @@ Hallucination filters are applied in `transcription_engine.py` → `transcribe_c
 - `compression_ratio` check: Repetitive text (hallucination indicator)
 
 Bypass filters for high-confidence segments using `extreme_confidence_cutoff`.
+
+### Configuring Segment Merging
+
+Consecutive segments from the same speaker are merged based on time gaps (implemented in `transcription_engine.py` → `_merge_segments()`):
+
+**Configuration** (in `config.json` → `settings`):
+```json
+{
+  "merge_timeout_ms": 500
+}
+```
+
+**Behavior:**
+- `merge_timeout_ms: 500` (default): Only merge consecutive segments if gap < 500ms
+  - "Fire on" [200ms gap] "Main Street" → merged as one line
+  - "Fire on" [1000ms gap] "Main Street" → separate lines
+- `merge_timeout_ms: 0`: Disable merging entirely, show all segments separately
+- `merge_timeout_ms: 1000`: Merge segments with gaps up to 1 second
+
+**Use Cases:**
+- Dispatch radio: Use 500ms to group fast speech but show natural pauses
+- High verbosity: Use 0ms to see every Whisper segment (more granular)
+- Narrative transcription: Use 1000-2000ms for paragraph-like output
+
+**Example output** (merge_timeout_ms: 500):
+```
+[0.0s] Dispatcher: Fire on Main Street
+[1.5s] Dispatcher: all units proceed
+[3.2s] Driver: Copy that responding
+
+vs merge_timeout_ms: 0:
+[0.0s] Dispatcher: Fire on
+[0.5s] Dispatcher: Main Street
+[1.2s] Dispatcher: all units
+[1.5s] Dispatcher: proceed
+[3.2s] Driver: Copy that
+[3.8s] Driver: responding
+```
 
 ### Adding WebSocket Message Types
 

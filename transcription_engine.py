@@ -335,36 +335,66 @@ def transcribe_chunk(
             "confidence": segment.avg_logprob
         })
     
-    # Merge consecutive segments from same speaker
+    # Merge consecutive segments from same speaker within timeout window
     if processed_segments:
-        merged = _merge_segments(processed_segments)
-        
+        merge_timeout_ms = get_setting("merge_timeout_ms", 500)
+        merged = _merge_segments(processed_segments, merge_timeout_ms=merge_timeout_ms)
+
         # Output results
         if output_callback and start_time:
             output_callback(merged, start_time, audio_flat)
-        
+
         # Store for context
         transcribe_chunk.last_transcript = " ".join([m["text"] for m in merged])
     
     return _get_context_tail(audio_flat)
 
 
-def _merge_segments(segments: list) -> list:
-    """Merge consecutive segments from the same speaker."""
+def _merge_segments(segments: list, merge_timeout_ms: int = 500) -> list:
+    """
+    Merge consecutive segments from the same speaker if within timeout window.
+
+    Args:
+        segments: List of transcript segments with speaker, text, start, end, confidence
+        merge_timeout_ms: Maximum time gap (ms) between segments to merge (default 500ms)
+                         If set to 0, no merging occurs
+
+    Returns:
+        List of segments, with consecutive same-speaker segments merged if gap < timeout
+    """
+    if merge_timeout_ms <= 0:
+        # No merging - return segments as-is with metadata
+        for seg in segments:
+            seg["_seg_count"] = 1
+        return segments
+
+    merge_timeout_sec = merge_timeout_ms / 1000.0
     merged = []
+
     for seg in segments:
         if merged and merged[-1]["speaker"] == seg["speaker"]:
-            prev_count = merged[-1].get("_seg_count", 1)
-            curr_conf = merged[-1].get("confidence", 0)
-            new_conf = (curr_conf * prev_count + seg["confidence"]) / (prev_count + 1)
-            
-            merged[-1]["text"] += " " + seg["text"]
-            merged[-1]["end"] = seg["end"]
-            merged[-1]["confidence"] = new_conf
-            merged[-1]["_seg_count"] = prev_count + 1
+            # Check time gap between end of previous segment and start of current
+            time_gap = seg["start"] - merged[-1]["end"]
+
+            if time_gap <= merge_timeout_sec:
+                # Within timeout window - merge
+                prev_count = merged[-1].get("_seg_count", 1)
+                curr_conf = merged[-1].get("confidence", 0)
+                new_conf = (curr_conf * prev_count + seg["confidence"]) / (prev_count + 1)
+
+                merged[-1]["text"] += " " + seg["text"]
+                merged[-1]["end"] = seg["end"]
+                merged[-1]["confidence"] = new_conf
+                merged[-1]["_seg_count"] = prev_count + 1
+            else:
+                # Gap too large - start new segment
+                seg["_seg_count"] = 1
+                merged.append(seg)
         else:
+            # Different speaker - start new segment
             seg["_seg_count"] = 1
             merged.append(seg)
+
     return merged
 
 
