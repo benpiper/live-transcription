@@ -9,8 +9,35 @@
         "to_addresses": ["target-email@example.com"]
     },
     "alerts": {
-        "keywords": ["fire", "emergency", "ambulance", "shooting", "police"],
-        "rate_limit_seconds": 300,
+        "rules": [
+            {
+                "id": "fire-emergency",
+                "pattern": ["fire", "burning", "structure fire"],
+                "match_type": "word",
+                "description": "Fire emergency detected",
+                "tags": ["emergency", "fire"],
+                "dedup_cooldown_sec": 60,
+                "enabled": false
+            },
+            {
+                "id": "location-match",
+                "pattern": "\\b(Main|Oak|Elm|Grove|Spring)\\s+(?:St|Street|Ave|Road|Ln|Lane)\\b",
+                "match_type": "regex",
+                "description": "Dispatch location match",
+                "tags": ["location"],
+                "dedup_cooldown_sec": 300,
+                "enabled": true
+            },
+            {
+                "id": "generic-keywords",
+                "pattern": ["ambulance", "emergency", "police"],
+                "match_type": "substring",
+                "description": "Generic emergency keywords",
+                "tags": ["general"],
+                "dedup_cooldown_sec": 120,
+                "enabled": true
+            }
+        ],
         "subject_prefix": "[Transcription Alert]",
         "context_count": 3,
         "attach_audio": true
