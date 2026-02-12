@@ -6,7 +6,6 @@ const volStatus = document.getElementById('vol-status');
 const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 const latencyStat = document.getElementById('latency-stat');
-const bufferStat = document.getElementById('buffer-stat');
 const processTimeStat = document.getElementById('process-time-stat');
 const silentAudio = document.getElementById('silent-audio');
 
@@ -351,12 +350,7 @@ function handleAudioData(data) {
         rawAudioHistory.shift();
     }
 
-    if (msgCount % 20 === 0) {
-        if (audioCtx) {
-            const bufferDepth = Math.max(0, startTime - audioCtx.currentTime);
-            document.getElementById('buffer-stat').textContent = `${(bufferDepth * 1000).toFixed(0)}ms`;
-        }
-    }
+    // Buffer monitoring removed - using compact connection info display
 
     // Play if enabled and not currently playing back history
     if (isAudioEnabled && audioCtx && !isPlaybackMuted) {

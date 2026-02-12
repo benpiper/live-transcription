@@ -50,26 +50,22 @@
 
             <aside class="sidebar">
                 <section class="visualizer-section">
-                    <h3>Audio Signal</h3>
+                    <h3 title="Real-time audio signal visualization">Audio Signal</h3>
                     <canvas id="visualizer"></canvas>
                     <div class="vol-stats">
-                        <span id="vol-level">0.0000</span>
-                        <span id="vol-status">Quiet</span>
+                        <span id="vol-level" title="Current audio volume level (0.0 = silent, 1.0 = max)">0.0000</span>
+                        <span id="vol-status" title="Audio level classification">Quiet</span>
                     </div>
                 </section>
 
                 <section class="info-section">
-                    <h3>Connection Info</h3>
+                    <h3 title="Server latency and processing performance metrics">Connection Info</h3>
                     <div class="stat-grid">
-                        <div class="stat-item">
+                        <div class="stat-item" title="Delay between transcript generation and browser receipt">
                             <label>Latency</label>
                             <span id="latency-stat">---</span>
                         </div>
-                        <div class="stat-item">
-                            <label>Buffer</label>
-                            <span id="buffer-stat">0ms</span>
-                        </div>
-                        <div class="stat-item">
+                        <div class="stat-item" title="Time spent processing audio on the server">
                             <label>Process Time</label>
                             <span id="process-time-stat">---</span>
                         </div>

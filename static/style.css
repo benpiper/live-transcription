@@ -441,26 +441,28 @@ canvas {
 .stat-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 12px;
+    gap: 8px;
+    margin-top: 8px;
 }
 
 .stat-item {
     background: var(--input-bg);
-    padding: 12px;
-    border-radius: 12px;
+    padding: 8px;
+    border-radius: 8px;
 }
 
 .stat-item label {
     display: block;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     text-transform: uppercase;
     color: var(--text-muted);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+    letter-spacing: 0.02em;
 }
 
 .stat-item span {
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .stat-item.full {
@@ -471,12 +473,6 @@ canvas {
 .slow-processing {
     color: var(--danger);
     font-weight: 700;
-}
-
-/* Expand stat-grid to 2x2 layout */
-.stat-grid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto;
 }
 
 .config-section h3 {
