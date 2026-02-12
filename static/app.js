@@ -7,6 +7,7 @@ const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 const latencyStat = document.getElementById('latency-stat');
 const processTimeStat = document.getElementById('process-time-stat');
+const bufferSizeStat = document.getElementById('buffer-size-stat');
 const silentAudio = document.getElementById('silent-audio');
 
 let ws;
@@ -244,6 +245,39 @@ async function loadCurrentSession() {
     }
 }
 
+// Fetch and display audio buffer status
+let bufferStatusInterval = null;
+
+async function updateBufferStatus() {
+    try {
+        const response = await fetch('/api/audio/buffer-status');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const stats = await response.json();
+        const bufferMb = stats.buffer_size_mb || 0;
+        const durationSec = stats.duration_available_sec || 0;
+
+        // Format buffer size: show in MB if < 1GB, otherwise GB
+        let bufferText;
+        if (bufferMb >= 1024) {
+            bufferText = `${(bufferMb / 1024).toFixed(1)}GB`;
+        } else {
+            bufferText = `${bufferMb.toFixed(1)}MB`;
+        }
+
+        // Add duration info in tooltip (duration_available_sec)
+        const minutes = Math.floor(durationSec / 60);
+        const seconds = Math.floor(durationSec % 60);
+        const durationText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+
+        bufferSizeStat.textContent = bufferText;
+        bufferSizeStat.title = `Audio buffer: ${bufferText} (${durationText} of audio)`;
+    } catch (err) {
+        console.warn("Failed to fetch buffer status:", err);
+        bufferSizeStat.textContent = 'N/A';
+    }
+}
+
 function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -268,10 +302,23 @@ function connect() {
 
         // Initialize Media Session metadata
         setupMediaSession();
+
+        // Start fetching buffer status periodically (every 2 seconds)
+        updateBufferStatus();  // Initial fetch
+        if (bufferStatusInterval) clearInterval(bufferStatusInterval);
+        bufferStatusInterval = setInterval(updateBufferStatus, 2000);
     };
 
     ws.onclose = (e) => {
         console.warn("WebSocket closed:", e.code, e.reason);
+
+        // Stop buffer status updates
+        if (bufferStatusInterval) {
+            clearInterval(bufferStatusInterval);
+            bufferStatusInterval = null;
+        }
+        bufferSizeStat.textContent = '---';
+
         reconnectAttempts++;
         const retryDelay = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), 30000);  // Exponential backoff, max 30s
 
