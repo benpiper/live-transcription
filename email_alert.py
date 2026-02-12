@@ -303,7 +303,6 @@ class EmailAlertTool:
             ("smtp", "port"): int,
             ("smtp", "from_address"): str,
             ("smtp", "to_addresses"): list,
-            ("alerts", "keywords"): list,
             ("websocket", "url"): str,
         }
 
