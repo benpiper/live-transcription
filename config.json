@@ -100,7 +100,8 @@
         "rms_target_level": 0.1,
         "audio_buffer_window_sec": 7200,
         "audio_buffer_chunk_size_sec": 0.256,
-        "merge_timeout_ms": 500
+        "merge_timeout_ms": 500,
+        "gpu_recovery_interval_min": 10
     },
     "session_management": {
         "enable_rollover": true,

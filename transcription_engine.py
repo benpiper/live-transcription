@@ -25,6 +25,27 @@ model = None
 # Audio parameters
 SAMPLE_RATE = 16000
 
+# Device state tracking
+_active_device = None        # 'cuda' or 'cpu' - what we're currently running on
+_intended_device = None      # What the user/config wanted
+_is_fallback = False         # True if we fell back from GPU to CPU
+_last_gpu_probe_time = 0     # Unix timestamp of last GPU recovery attempt
+_fallback_count = 0          # Number of times we've fallen back in this session
+
+# Device-specific presets (optimized defaults per device)
+DEVICE_PRESETS = {
+    "cuda": {
+        "compute_type": "int8_float16",
+        "beam_size": 6,
+        "cpu_threads": 4,
+    },
+    "cpu": {
+        "compute_type": "int8",
+        "beam_size": 3,
+        "cpu_threads": 8,
+    },
+}
+
 
 def setup_cuda_paths():
     """
@@ -93,51 +114,147 @@ def setup_cuda_paths():
     return extra_paths
 
 
+def get_active_device():
+    """Return the device currently in use ('cuda' or 'cpu')."""
+    return _active_device
+
+
+def is_in_fallback():
+    """Return True if currently running on CPU due to GPU failure."""
+    return _is_fallback
+
+
+def _apply_preset(device):
+    """
+    Get effective settings by merging device preset with user config.
+    
+    User-explicit settings in config.json override preset defaults,
+    but 'auto' values are resolved using the preset.
+    """
+    settings = TRANSCRIPTION_CONFIG["settings"]
+    preset = DEVICE_PRESETS.get(device, DEVICE_PRESETS["cpu"])
+    
+    # Compute type: use preset if config says 'auto', otherwise respect config
+    config_compute = settings.get("compute_type", "auto")
+    if config_compute == "auto":
+        compute_type = preset["compute_type"]
+    else:
+        # If user explicitly set a GPU compute type but we're on CPU, override
+        if device == "cpu" and config_compute in ("float16", "int8_float16"):
+            compute_type = preset["compute_type"]
+            logger.info(f"Overriding compute_type '{config_compute}' → '{compute_type}' for CPU")
+        else:
+            compute_type = config_compute
+    
+    # Beam size and threads: use preset values when in auto/fallback mode
+    beam_size = preset["beam_size"]
+    cpu_threads = preset["cpu_threads"]
+    
+    return compute_type, beam_size, cpu_threads
+
+
+def _load_model_on_device(device):
+    """
+    Internal helper to load model on a specific device.
+    
+    Returns the loaded model and the effective settings used.
+    Raises on failure.
+    """
+    settings = TRANSCRIPTION_CONFIG["settings"]
+    model_size = settings.get("model_size", "medium.en")
+    
+    compute_type, beam_size, cpu_threads = _apply_preset(device)
+    
+    logger.info(f"Loading model '{model_size}' on {device} (compute={compute_type}, beam={beam_size}, threads={cpu_threads})")
+    print(f"Loading faster-whisper model ({model_size}) on {device}...")
+    
+    loaded_model = WhisperModel(
+        model_size,
+        device=device,
+        compute_type=compute_type,
+        cpu_threads=cpu_threads
+    )
+    
+    print(f"Model loaded (Device: {device}, Type: {compute_type}, Beam: {beam_size}, Threads: {cpu_threads}).")
+    logger.info(f"Model loaded: {model_size} on {device}")
+    
+    return loaded_model, {"compute_type": compute_type, "beam_size": beam_size, "cpu_threads": cpu_threads}
+
+
+def _reload_on_cpu(reason=""):
+    """
+    Emergency fallback: reload model on CPU.
+    
+    Called when GPU fails at load time or during transcription.
+    """
+    global model, _active_device, _is_fallback, _fallback_count
+    
+    msg = f"⚠️  Falling back to CPU"
+    if reason:
+        msg += f": {reason}"
+    print(msg)
+    logger.warning(msg)
+    
+    # Clean up failed GPU model
+    try:
+        if model is not None:
+            del model
+            model = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    
+    import gc
+    gc.collect()
+    
+    # Load on CPU
+    model, effective = _load_model_on_device("cpu")
+    _active_device = "cpu"
+    _is_fallback = True
+    _fallback_count += 1
+    
+    print(f"✅ Running on CPU fallback (recovery will be attempted periodically)")
+    logger.info(f"CPU fallback active (fallback #{_fallback_count})")
+
+
 def load_model():
     """
     Initialize the Faster-Whisper model using configuration settings.
     
     Automatically detects CUDA availability and selects appropriate
-    compute type for optimal performance.
+    device preset. Falls back to CPU if GPU loading fails.
     """
-    global model
+    global model, _active_device, _intended_device, _is_fallback
     
     settings = TRANSCRIPTION_CONFIG["settings"]
-    model_size = settings.get("model_size", "medium.en")
     device_setting = settings.get("device", "auto")
-    compute_type = settings.get("compute_type", "auto")
-    cpu_threads = settings.get("cpu_threads", 4)
     
-    # Determine device
+    # Determine intended device
     if device_setting == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _intended_device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
-        device = device_setting
+        _intended_device = device_setting
     
-    # Determine compute type
-    if compute_type == "auto":
-        computed_type = "float16" if device == "cuda" else "int8"
-    else:
-        computed_type = compute_type
-    
-    if device == "cuda":
-        print("CUDA detected. Using GPU acceleration (float16).")
+    if _intended_device == "cuda":
+        print("🖥️  CUDA detected. Using GPU acceleration.")
         logger.info("Using CUDA GPU acceleration")
     else:
-        print("CUDA not available. Using CPU.")
+        print("🖥️  Using CPU for transcription.")
         logger.info("Using CPU for transcription")
     
-    print(f"Loading faster-whisper model ({model_size}) on {device}...")
-    
-    model = WhisperModel(
-        model_size,
-        device=device,
-        compute_type=computed_type,
-        cpu_threads=cpu_threads
-    )
-    
-    print(f"Model loaded (Threads: {cpu_threads}, Device: {device}, Type: {computed_type}).")
-    logger.info(f"Model loaded: {model_size} on {device}")
+    # Attempt to load on intended device
+    try:
+        model, effective = _load_model_on_device(_intended_device)
+        _active_device = _intended_device
+        _is_fallback = False
+    except Exception as e:
+        if _intended_device == "cuda":
+            logger.error(f"GPU model load failed: {e}")
+            _reload_on_cpu(reason=str(e))
+        else:
+            # CPU load failed — nothing to fall back to
+            raise
 
 
 def transcribe_chunk(
@@ -227,12 +344,18 @@ def transcribe_chunk(
     if initial_prompt:
         logger.debug(f"Whisper prompt ({len(initial_prompt)} chars): {initial_prompt}")
     
-    # Transcribe
+    # Check if GPU recovery should be attempted
+    _try_recover_gpu()
+
+    # Get beam_size from active device preset
+    _, preset_beam, _ = _apply_preset(_active_device)
+
+    # Transcribe (with GPU fallback on runtime error)
     try:
         segments, info = model.transcribe(
             audio_flat,
             language="en",
-            beam_size=settings.get("beam_size", 5),
+            beam_size=preset_beam,
             initial_prompt=initial_prompt,
             condition_on_previous_text=False,
             no_speech_threshold=settings.get("no_speech_threshold", 0.6),
@@ -244,8 +367,32 @@ def transcribe_chunk(
             }
         )
     except Exception as e:
-        logger.error(f"Transcription failed: {e}")
-        return _get_context_tail(audio_flat)
+        if _active_device == "cuda":
+            logger.error(f"GPU transcription failed: {e}")
+            _reload_on_cpu(reason=str(e))
+            # Retry once on CPU
+            try:
+                _, retry_beam, _ = _apply_preset("cpu")
+                segments, info = model.transcribe(
+                    audio_flat,
+                    language="en",
+                    beam_size=retry_beam,
+                    initial_prompt=initial_prompt,
+                    condition_on_previous_text=False,
+                    no_speech_threshold=settings.get("no_speech_threshold", 0.6),
+                    log_prob_threshold=settings.get("log_prob_threshold", -1.0),
+                    compression_ratio_threshold=settings.get("compression_ratio_threshold", 2.4),
+                    vad_filter=True,
+                    vad_parameters={
+                        "min_silence_duration_ms": settings.get("min_silence_duration_ms", 500)
+                    }
+                )
+            except Exception as retry_err:
+                logger.error(f"CPU retry also failed: {retry_err}")
+                return _get_context_tail(audio_flat)
+        else:
+            logger.error(f"Transcription failed: {e}")
+            return _get_context_tail(audio_flat)
     
     # Process segments
     processed_segments = []
@@ -406,13 +553,73 @@ def _get_context_tail(audio: np.ndarray) -> np.ndarray:
     return audio
 
 
+def _try_recover_gpu():
+    """
+    Periodically attempt to recover GPU if we're in CPU fallback mode.
+    
+    Only runs if:
+    - We're currently in fallback mode (_is_fallback is True)
+    - The intended device was 'cuda'
+    - Enough time has passed since the last probe
+    """
+    global model, _active_device, _is_fallback, _last_gpu_probe_time
+    
+    if not _is_fallback or _intended_device != "cuda":
+        return
+    
+    import time as _time
+    now = _time.time()
+    recovery_interval = get_setting("gpu_recovery_interval_min", 10) * 60
+    
+    if now - _last_gpu_probe_time < recovery_interval:
+        return
+    
+    _last_gpu_probe_time = now
+    
+    # Check if CUDA is available
+    if not torch.cuda.is_available():
+        logger.debug("GPU recovery probe: CUDA still unavailable")
+        return
+    
+    logger.info("GPU recovery probe: CUDA available, attempting model reload on GPU...")
+    print("🔄 Attempting GPU recovery...")
+    
+    try:
+        # Try loading on GPU
+        new_model, effective = _load_model_on_device("cuda")
+        
+        # Success — swap models
+        old_model = model
+        model = new_model
+        _active_device = "cuda"
+        _is_fallback = False
+        
+        # Clean up old CPU model
+        del old_model
+        import gc
+        gc.collect()
+        
+        print("✅ GPU recovered! Switched back to CUDA.")
+        logger.info("GPU recovery successful — now running on CUDA")
+        
+    except Exception as e:
+        logger.warning(f"GPU recovery failed, staying on CPU: {e}")
+        print(f"⚠️  GPU recovery failed: {e}. Staying on CPU.")
+        # Clean up any partial GPU state
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+
 def cleanup_model():
     """
     Release GPU resources held by the Whisper model.
 
     Called during graceful shutdown to ensure GPU memory is returned to the system.
     """
-    global model
+    global model, _active_device, _is_fallback
 
     if model is None:
         return
@@ -422,6 +629,8 @@ def cleanup_model():
     try:
         del model
         model = None
+        _active_device = None
+        _is_fallback = False
 
         # Release GPU memory if CUDA is available
         if torch.cuda.is_available():

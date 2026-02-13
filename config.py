@@ -35,7 +35,8 @@ DEFAULT_CONFIG = {
         "voice_profiles_dir": "voice_profiles",
         "voice_match_threshold": 0.7,
         "audio_buffer_window_sec": 7200,
-        "audio_buffer_chunk_size_sec": 0.256
+        "audio_buffer_chunk_size_sec": 0.256,
+        "gpu_recovery_interval_min": 10
     },
     "session_management": {
         "enable_rollover": False,

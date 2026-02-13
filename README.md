@@ -13,6 +13,7 @@ A high-performance, real-time audio transcription tool using the `faster-whisper
 - **Hallucination Suppression**: Advanced filtering using `no_speech_prob`, `avg_logprob`, and `compression_ratio` to eliminate "YouTube-style" ghosts.
 - **Custom Vocabulary & Corrections**: Bias the AI toward specific terms and apply automated phonetic corrections via a JSON config file.
 - **HTTPS & Secure WebSockets**: Optional SSL support for secure web dashboard access and data streaming.
+- **GPU/CPU Presets & Fallback**: Device-optimized presets with automatic GPU→CPU fallback on errors and periodic GPU recovery.
 - **File Output**: Automatically save all transcriptions to a text file with real-time flushing.
 
 ## 🛠 Prerequisites
@@ -216,6 +217,7 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `ssl_enabled` | `false` | `true`, `false` | Enable SSL for the web server by default. |
 | `ssl_certfile` | `cert.pem` | string | Path to the SSL certificate file. |
 | `ssl_keyfile` | `key.pem` | string | Path to the SSL private key file. |
+| `gpu_recovery_interval_min` | `10` | `1`+ | Minutes between GPU recovery probes when running in CPU fallback mode. Set higher to reduce probe overhead. |
 
 ## 🎤 Voice Profiles
 

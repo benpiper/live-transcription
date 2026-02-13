@@ -137,6 +137,32 @@ The application **manually pre-loads NVIDIA libraries** before importing `faster
 
 **Important**: Must be called before importing `faster_whisper.WhisperModel` to avoid runtime linker errors.
 
+### Device Presets & GPU Fallback
+
+The system uses device-specific presets optimized for GPU vs CPU, with automatic fallback and recovery (implemented in `transcription_engine.py`):
+
+**Presets** (`DEVICE_PRESETS`):
+
+| Setting | GPU (cuda) | CPU |
+|---------|-----------|-----|
+| `compute_type` | `int8_float16` | `int8` |
+| `beam_size` | 6 | 3 |
+| `cpu_threads` | 4 | 8 |
+
+**Fallback behavior:**
+- If GPU model loading fails (OOM, driver errors), automatically reloads on CPU with CPU preset
+- If GPU transcription fails at runtime (CUDA errors), reloads on CPU and retries the current chunk
+- User-set `compute_type` in config.json is respected unless it's GPU-only (e.g., `float16` on CPU auto-corrects to `int8`)
+
+**GPU recovery:**
+- When running in CPU fallback mode, the system probes GPU availability periodically
+- Controlled by `gpu_recovery_interval_min` setting (default: 10 minutes)
+- On successful probe, model is swapped back to GPU seamlessly
+
+**Key functions:**
+- `get_active_device()`: Returns `'cuda'` or `'cpu'`
+- `is_in_fallback()`: Returns `True` if running on CPU due to GPU failure
+
 ### Audio Quality Enhancements
 
 The system now includes production-ready audio processing (implemented in `audio_processing.py`):
