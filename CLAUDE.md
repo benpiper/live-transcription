@@ -77,7 +77,7 @@ All threads coordinate via `threading.Event` (`stop_event`) for graceful shutdow
 | Module | Purpose | Key Exports |
 |--------|---------|-------------|
 | `real_time_transcription.py` | Main entry point, orchestrates all components | CLI interface, audio capture thread, transcription thread |
-| `transcription_engine.py` | Whisper model management and audio processing | `load_model()`, `transcribe_chunk()`, `setup_cuda_paths()` |
+| `transcription_engine.py` | Whisper model management, device presets, GPU fallback | `load_model()`, `transcribe_chunk()`, `setup_cuda_paths()`, `get_active_device()`, `is_in_fallback()` |
 | `audio_processing.py` | Audio quality enhancements (VAD, noise reduction, normalization) | `is_speech()`, `reduce_noise()`, `normalize_rms()` |
 | `speaker_manager.py` | Speaker diarization and identification | `SpeakerManager` class, `speaker_manager` singleton |
 | `voice_profiles.py` | Pre-registered speaker profiles | `VoiceProfileManager` class, `voice_profile_manager` singleton |
@@ -97,7 +97,7 @@ audio_callback() [sounddevice callback]
     ↓
 audio_queue (queue.Queue)
     ↓
-transcription_worker() [thread]
+transcribe_audio_loop() [thread]
     ├→ load_model() [faster-whisper]
     ├→ transcribe_chunk() [Whisper inference]
     ├→ speaker_manager.identify_speaker() [ECAPA-TDNN embeddings]
@@ -389,7 +389,7 @@ vs merge_timeout_ms: 0:
 
 ### Adding WebSocket Message Types
 
-1. Define message structure in `real_time_transcription.py` → `transcription_worker()`
+1. Define message structure in `real_time_transcription.py` → `output_transcription()`
 2. Push to `broadcast_queue`
 3. Handle in `static/app.js` → `ws.onmessage` switch statement
 

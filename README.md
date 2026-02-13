@@ -195,8 +195,8 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | :--- | :--- | :--- | :--- |
 | `model_size` | `medium.en` | `tiny`, `base`, `small`, `medium`, `large-v3` | The Whisper model size. Larger models are more accurate but slower and require more VRAM. |
 | `device` | `auto` | `auto`, `cuda`, `cpu` | Hardware device for execution. `cuda` requires an NVIDIA GPU and proper drivers. |
-| `compute_type` | `auto` | `float16`, `int8`, `auto` | Precision for computation. `float16` is recommended for GPU; `int8` for CPU. |
-| `cpu_threads` | `4` | `1`+ | Number of threads used for CPU processing. |
+| `compute_type` | `auto` | `float16`, `int8_float16`, `int8`, `auto` | Precision for computation. `auto` selects the optimal type per device (GPU: `int8_float16`, CPU: `int8`). |
+| `cpu_threads` | preset | `1`+ | Number of threads for CPU processing. Preset default: 4 (GPU), 8 (CPU). |
 | `no_speech_threshold` | `0.6` | `0.0` - `1.0` | **(Higher = More Strict)**. Internal VAD sensitivity. If the probability that a segment is silence is *higher* than this, it's ignored. Increase if you see "phantom" text; decrease if the model skips soft speech. |
 | `log_prob_threshold` | `-1.0` | `-inf` - `0.0` | **(Higher = More Strict)**. Whisper internal retry threshold. If tokens fall *below* this, the model retries with higher randomness. **Warning**: High values can increase latency by 5x due to re-processing attempts. |
 | `compression_ratio_threshold` | `2.4` | `1.0` - `inf` | **(Lower = More Strict)**. Detects repetitive "loops." If the ratio is *higher* than this, the segment is rejected. Lower values (e.g., `1.8`) are aggressive at killing hallucinations. |
@@ -205,7 +205,7 @@ You can provide a JSON file to help the AI with specific terminology and behavio
 | `extreme_confidence_cutoff` | `-0.4` | `-inf` - `0.0` | **(Higher = More Strict)**. If a segment's confidence is *better* (higher) than this, it bypasses the `no_speech_prob` check completely. (Prevents short commands from being filtered). |
 | `min_window_sec` | `1.0` | `0.0`+ | How long to wait for a natural pause before attempting transcription. |
 | `max_window_sec` | `10.0` | `min_window_sec`+ | **(Lower = Faster Updates)**. Force transcription if no pause is found. Lowering to `5.0` provides faster UI updates but may cut off speakers mid-sentence. |
-| `beam_size` | `5` | `1` - `20` | **(Higher = More Accurate)**. Number of parallel search paths. `5` is balanced; `10` is very accurate but doubles CPU/GPU load. |
+| `beam_size` | preset | `1` - `20` | **(Higher = More Accurate)**. Number of parallel search paths. Preset default: 6 (GPU), 3 (CPU). |
 | `min_silence_duration_ms` | `500` | `0`+ | How long a silence gap must be to trigger the end of a sentence. |
 | `initial_prompt` | `""` | string | Domain context to guide Whisper. Example: `"Emergency dispatch radio. 10-codes, unit numbers, street addresses."` Improves accuracy for specialized audio. |
 | `max_queue_size` | `0` | `0`+ | Maximum audio chunks before dropping old ones. `0` = never drop (recommended). Set to `20+` if you need real-time priority over completeness. |
