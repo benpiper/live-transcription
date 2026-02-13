@@ -101,9 +101,12 @@ h1 {
 }
 
 @keyframes pulse-badge {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.7;
     }
@@ -149,7 +152,7 @@ main {
 }
 
 .feed-section {
-    padding: 32px;
+    padding: 16px 24px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -160,16 +163,17 @@ main {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
 }
 
 .transcript-container {
     flex: 1;
     overflow-y: auto;
     padding-right: 12px;
-    padding-bottom: 24px;
+    padding-bottom: 12px;
     will-change: transform;
-    contain: content; /* Helps with layout performance */
+    contain: content;
+    /* Helps with layout performance */
 }
 
 .transcript-container::-webkit-scrollbar {
@@ -182,8 +186,34 @@ main {
 }
 
 .transcript-item {
-    margin-bottom: 10px;
+    margin-bottom: 4px;
     animation: slideIn 0.3s ease-out;
+}
+
+.transcript-item.continuation {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+    padding-left: 4px;
+    border-left: 2px solid var(--border);
+}
+
+.transcript-item.continuation .speaker {
+    display: none;
+}
+
+.transcript-item.continuation .transcript-header {
+    order: 2;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.transcript-item.continuation .transcript-text {
+    order: 1;
+    flex: 1;
+    padding-top: 0;
+    min-width: 0;
 }
 
 .btn-icon {
@@ -268,8 +298,8 @@ main {
 .transcript-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: 6px;
+    margin-bottom: 2px;
     justify-content: space-between;
 }
 
@@ -388,8 +418,8 @@ main {
 }
 
 .transcript-text {
-    font-size: clamp(0.95rem, 2.5vw, 1.1rem);
-    line-height: 1.6;
+    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+    line-height: 1.35;
     color: var(--text-main);
 }
 
@@ -1350,4 +1380,3 @@ canvas {
         opacity: 0.7;
     }
 }
-

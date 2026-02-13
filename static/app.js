@@ -198,6 +198,7 @@ async function loadCurrentSession() {
 
             // Batch DOM updates using DocumentFragment
             const fragment = document.createDocumentFragment();
+            let prevSpeaker = null;
 
             for (const t of data.transcripts) {
                 // Add to transcriptionHistory without loading binary audio into RAM
@@ -214,6 +215,14 @@ async function loadCurrentSession() {
                 };
 
                 const element = createTranscriptElement(t, true); // No need to pass audio data
+
+                // Consolidate consecutive same-speaker headings
+                const currentSpeaker = t.speaker || 'Unknown';
+                if (prevSpeaker && currentSpeaker === prevSpeaker) {
+                    element.classList.add('continuation');
+                }
+                prevSpeaker = currentSpeaker;
+
                 historyItem.el = element;
                 element.dataset.historyId = historyItem.id;
                 transcriptionHistory.push(historyItem);
@@ -221,7 +230,7 @@ async function loadCurrentSession() {
                 fragment.appendChild(element);
 
                 // Track speakers
-                const itemSpeaker = t.speaker || 'Unknown';
+                const itemSpeaker = currentSpeaker;
                 speakers.add(itemSpeaker);
             }
 
@@ -303,10 +312,10 @@ function connect() {
         // Initialize Media Session metadata
         setupMediaSession();
 
-        // Start fetching buffer status periodically (every 2 seconds)
+        // Start fetching buffer status periodically (every 60 seconds)
         updateBufferStatus();  // Initial fetch
         if (bufferStatusInterval) clearInterval(bufferStatusInterval);
-        bufferStatusInterval = setInterval(updateBufferStatus, 2000);
+        bufferStatusInterval = setInterval(updateBufferStatus, 60000);
     };
 
     ws.onclose = (e) => {
@@ -453,6 +462,13 @@ function triggerNotification(text) {
             console.error("Failed to show notification:", e);
         }
     }
+}
+
+// Get the speaker of the last visible transcript item in the feed
+function getLastVisibleSpeaker() {
+    const items = transcriptFeed.querySelectorAll('.transcript-item');
+    if (items.length === 0) return null;
+    return items[items.length - 1].dataset.speaker || null;
 }
 
 // Creates a transcript DOM element without appending it
@@ -628,6 +644,12 @@ function addTranscriptItem(data, fromSession = false) {
         </div>
         <div class="transcript-text">${highlightWatchwords(data.text)}</div>
     `;
+
+    // Consolidate consecutive same-speaker headings
+    const lastSpeaker = getLastVisibleSpeaker();
+    if (lastSpeaker && itemSpeaker === lastSpeaker) {
+        item.classList.add('continuation');
+    }
 
     transcriptionHistory.push(historyItem);
     transcriptFeed.appendChild(item);
@@ -861,7 +883,7 @@ async function downloadSegment(id) {
         return;
     }
 
-    console.log("Download item found:", {id: item.id, duration: item.duration, origin_time: item.origin_time, text: item.text.substring(0, 50)});
+    console.log("Download item found:", { id: item.id, duration: item.duration, origin_time: item.origin_time, text: item.text.substring(0, 50) });
 
     // Extract timestamp from segment ID
     // Format: "audio-{origin_time}" where origin_time is Unix float
