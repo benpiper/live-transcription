@@ -76,6 +76,68 @@
                     </div>
                 </section>
 
+                <section class="audio-processing-section">
+                    <div class="section-header">
+                        <h3>Audio Processing</h3>
+                        <div class="header-actions">
+                            <button id="audio-processing-reset" class="btn-text">Reset</button>
+                            <button id="audio-processing-collapse" class="btn-icon-small" title="Collapse/Expand">
+                                <span id="audio-processing-collapse-icon">−</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="audio-processing-content">
+                        <div class="toggle-row">
+                            <label for="audio-processing-enabled">Enable Processing</label>
+                            <input type="checkbox" id="audio-processing-enabled">
+                        </div>
+                        <div id="audio-processing-controls">
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Threshold</label>
+                                    <span id="compressor-threshold-val" class="slider-value">-30 dB</span>
+                                </div>
+                                <input type="range" id="compressor-threshold" min="-60" max="0" value="-30" step="1">
+                            </div>
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Ratio</label>
+                                    <span id="compressor-ratio-val" class="slider-value">8:1</span>
+                                </div>
+                                <input type="range" id="compressor-ratio" min="1" max="20" value="8" step="0.5">
+                            </div>
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Attack</label>
+                                    <span id="compressor-attack-val" class="slider-value">5 ms</span>
+                                </div>
+                                <input type="range" id="compressor-attack" min="0" max="100" value="5" step="1">
+                            </div>
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Release</label>
+                                    <span id="compressor-release-val" class="slider-value">150 ms</span>
+                                </div>
+                                <input type="range" id="compressor-release" min="10" max="1000" value="150" step="10">
+                            </div>
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Makeup Gain</label>
+                                    <span id="makeup-gain-val" class="slider-value">1.5×</span>
+                                </div>
+                                <input type="range" id="makeup-gain" min="0.5" max="4.0" value="1.5" step="0.1">
+                            </div>
+                            <div class="compressor-meter">
+                                <label>Reduction</label>
+                                <div class="meter-bar">
+                                    <div id="reduction-meter" class="meter-fill"></div>
+                                </div>
+                                <span id="reduction-val" class="slider-value">0 dB</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="watchword-section">
                     <div class="section-header">
                         <h3>Watchwords</h3>

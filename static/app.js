@@ -17,6 +17,12 @@ let startTime = 0;
 let speakers = new Set();
 let msgCount = 0;
 
+// Audio processing chain nodes (persistent, created once)
+let compressor;
+let makeupGain;
+let bypassGain;
+let isAudioProcessingEnabled = false;
+
 function ensureAudioContext() {
     if (!audioCtx) {
         try {
@@ -25,11 +31,43 @@ function ensureAudioContext() {
             });
             console.log("AudioContext created at 16000Hz");
 
+            // Load saved audio processing settings
+            const savedAudioProcessing = JSON.parse(localStorage.getItem('audioProcessing') || 'null');
+            const defaults = { threshold: -30, ratio: 8, attack: 0.005, release: 0.15, gain: 1.5, enabled: false };
+            const settings = savedAudioProcessing || defaults;
+            isAudioProcessingEnabled = settings.enabled;
+
+            // Create DynamicsCompressorNode for consistent volume levels
+            compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.value = settings.threshold;
+            compressor.knee.value = 20;
+            compressor.ratio.value = settings.ratio;
+            compressor.attack.value = settings.attack;
+            compressor.release.value = settings.release;
+
+            // Create GainNode for makeup gain (compensate for compression)
+            makeupGain = audioCtx.createGain();
+            makeupGain.gain.value = settings.gain;
+
+            // Create bypass GainNode (unity gain, used when processing is disabled)
+            bypassGain = audioCtx.createGain();
+            bypassGain.gain.value = 1.0;
+
             // Create AnalyserNode for spectrum
             analyser = audioCtx.createAnalyser();
             analyser.fftSize = 64; // Small size for 32 clean bars
             const bufferLength = analyser.frequencyBinCount;
             dataArray = new Uint8Array(bufferLength);
+
+            // Wire processed chain: compressor → makeupGain → destination + analyser
+            compressor.connect(makeupGain);
+            makeupGain.connect(audioCtx.destination);
+            makeupGain.connect(analyser);
+
+            // Wire bypass chain: bypassGain → destination + analyser
+            bypassGain.connect(audioCtx.destination);
+            bypassGain.connect(analyser);
+            console.log("Audio processing chain initialized (enabled:", isAudioProcessingEnabled, ")");
 
             // Start visualization loop
             updateVisualizerColors();
@@ -416,9 +454,15 @@ function handleAudioData(data) {
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
 
-        // Connect to both output and analyser
-        source.connect(audioCtx.destination);
-        if (analyser) source.connect(analyser);
+        // Route through processing chain or bypass
+        if (isAudioProcessingEnabled && compressor) {
+            source.connect(compressor);
+        } else if (bypassGain) {
+            source.connect(bypassGain);
+        } else {
+            source.connect(audioCtx.destination);
+            if (analyser) source.connect(analyser);
+        }
 
         // Schedule playback to avoid gaps
         const scheduleTime = Math.max(audioCtx.currentTime, startTime);
@@ -1072,7 +1116,15 @@ function playAudioBuffer(audioData, id, btn, context) {
 
     const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(context.destination);
+
+    // Route through processing chain or bypass
+    if (isAudioProcessingEnabled && compressor) {
+        source.connect(compressor);
+    } else if (bypassGain) {
+        source.connect(bypassGain);
+    } else {
+        source.connect(context.destination);
+    }
 
     activePlaybackSource = source;
     activePlaybackId = id;
@@ -1565,3 +1617,133 @@ if (scrollLockBtn) {
     });
 }
 
+
+// === Audio Processing Controls ===
+(function initAudioProcessingControls() {
+    const enabledCheckbox = document.getElementById('audio-processing-enabled');
+    const controlsDiv = document.getElementById('audio-processing-controls');
+    const collapseBtn = document.getElementById('audio-processing-collapse');
+    const collapseIcon = document.getElementById('audio-processing-collapse-icon');
+    const contentDiv = document.getElementById('audio-processing-content');
+    const resetBtn = document.getElementById('audio-processing-reset');
+
+    const thresholdSlider = document.getElementById('compressor-threshold');
+    const ratioSlider = document.getElementById('compressor-ratio');
+    const attackSlider = document.getElementById('compressor-attack');
+    const releaseSlider = document.getElementById('compressor-release');
+    const gainSlider = document.getElementById('makeup-gain');
+
+    const thresholdVal = document.getElementById('compressor-threshold-val');
+    const ratioVal = document.getElementById('compressor-ratio-val');
+    const attackVal = document.getElementById('compressor-attack-val');
+    const releaseVal = document.getElementById('compressor-release-val');
+    const gainVal = document.getElementById('makeup-gain-val');
+
+    const reductionMeter = document.getElementById('reduction-meter');
+    const reductionVal = document.getElementById('reduction-val');
+
+    const DEFAULTS = { threshold: -30, ratio: 8, attack: 5, release: 150, gain: 1.5, enabled: false };
+
+    function saveSettings() {
+        localStorage.setItem('audioProcessing', JSON.stringify({
+            threshold: parseFloat(thresholdSlider.value),
+            ratio: parseFloat(ratioSlider.value),
+            attack: parseFloat(attackSlider.value) / 1000,
+            release: parseFloat(releaseSlider.value) / 1000,
+            gain: parseFloat(gainSlider.value),
+            enabled: enabledCheckbox.checked
+        }));
+    }
+
+    function loadSettings() {
+        const saved = JSON.parse(localStorage.getItem('audioProcessing') || 'null');
+        if (saved) {
+            thresholdSlider.value = saved.threshold;
+            ratioSlider.value = saved.ratio;
+            attackSlider.value = Math.round(saved.attack * 1000);
+            releaseSlider.value = Math.round(saved.release * 1000);
+            gainSlider.value = saved.gain;
+            enabledCheckbox.checked = saved.enabled;
+            isAudioProcessingEnabled = saved.enabled;
+        }
+        updateDisplayValues();
+        controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+    }
+
+    function updateDisplayValues() {
+        thresholdVal.textContent = `${thresholdSlider.value} dB`;
+        ratioVal.textContent = `${ratioSlider.value}:1`;
+        attackVal.textContent = `${attackSlider.value} ms`;
+        releaseVal.textContent = `${releaseSlider.value} ms`;
+        gainVal.textContent = `${parseFloat(gainSlider.value).toFixed(1)}×`;
+    }
+
+    function applyToNodes() {
+        if (compressor) {
+            compressor.threshold.value = parseFloat(thresholdSlider.value);
+            compressor.ratio.value = parseFloat(ratioSlider.value);
+            compressor.attack.value = parseFloat(attackSlider.value) / 1000;
+            compressor.release.value = parseFloat(releaseSlider.value) / 1000;
+        }
+        if (makeupGain) {
+            makeupGain.gain.value = parseFloat(gainSlider.value);
+        }
+    }
+
+    // Slider event listeners
+    [thresholdSlider, ratioSlider, attackSlider, releaseSlider, gainSlider].forEach(slider => {
+        slider.addEventListener('input', () => {
+            updateDisplayValues();
+            applyToNodes();
+            saveSettings();
+        });
+    });
+
+    // Enable/disable toggle
+    enabledCheckbox.addEventListener('change', () => {
+        isAudioProcessingEnabled = enabledCheckbox.checked;
+        controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+        saveSettings();
+        console.log('Audio processing', isAudioProcessingEnabled ? 'enabled' : 'disabled');
+    });
+
+    // Collapse toggle
+    collapseBtn.addEventListener('click', () => {
+        const isCollapsed = contentDiv.classList.toggle('collapsed');
+        collapseIcon.textContent = isCollapsed ? '+' : '−';
+    });
+
+    // Reset to defaults
+    resetBtn.addEventListener('click', () => {
+        thresholdSlider.value = DEFAULTS.threshold;
+        ratioSlider.value = DEFAULTS.ratio;
+        attackSlider.value = DEFAULTS.attack;
+        releaseSlider.value = DEFAULTS.release;
+        gainSlider.value = DEFAULTS.gain;
+        enabledCheckbox.checked = DEFAULTS.enabled;
+        isAudioProcessingEnabled = DEFAULTS.enabled;
+        controlsDiv.classList.remove('disabled');
+        updateDisplayValues();
+        applyToNodes();
+        saveSettings();
+    });
+
+    // Reduction meter update (poll compressor.reduction)
+    function updateReductionMeter() {
+        if (compressor && isAudioProcessingEnabled && isAudioEnabled) {
+            const reduction = compressor.reduction; // Negative dB value
+            const absReduction = Math.abs(reduction);
+            reductionVal.textContent = `${reduction.toFixed(1)} dB`;
+            // Map 0-30dB reduction to 0-100% width
+            reductionMeter.style.width = `${Math.min(absReduction / 30 * 100, 100)}%`;
+        } else {
+            reductionVal.textContent = '0 dB';
+            reductionMeter.style.width = '0%';
+        }
+        requestAnimationFrame(updateReductionMeter);
+    }
+    updateReductionMeter();
+
+    // Initialize
+    loadSettings();
+})();
