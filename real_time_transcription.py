@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 # Import our modules
 from config import TRANSCRIPTION_CONFIG, load_config, get_setting, get_session_management_setting
-from transcription_engine import setup_cuda_paths, load_model, transcribe_chunk, SAMPLE_RATE
+from transcription_engine import setup_cuda_paths, load_model, transcribe_chunk, SAMPLE_RATE, set_status_callback
 from speaker_manager import speaker_manager, MIN_SPEAKER_ID_SAMPLES
 from audio_processing import is_speech
 from audio_buffer import audio_buffer
@@ -253,17 +253,28 @@ def transcribe_audio_loop():
         skip_diarization = qsize > 10
         
         t0 = time.time()
-        prev_context = transcribe_chunk(
-            total_audio, prev_context, start_time,
-            skip_diarization=skip_diarization,
-            speaker_model=speaker_model,
-            speaker_manager=speaker_manager,
-            output_callback=lambda segments, start, audio: output_transcription(
-                segments, start, audio,
-                vad_confidence=vad_confidence,
-                processing_time=time.time() - t0
+        try:
+            prev_context = transcribe_chunk(
+                total_audio, prev_context, start_time,
+                skip_diarization=skip_diarization,
+                speaker_model=speaker_model,
+                speaker_manager=speaker_manager,
+                output_callback=lambda segments, start, audio: output_transcription(
+                    segments, start, audio,
+                    vad_confidence=vad_confidence,
+                    processing_time=time.time() - t0
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Critical error in transcription loop: {e}", exc_info=True)
+            print(f"\n[CRITICAL ERROR] Transcription loop encountered an error: {e}")
+            # Ensure we don't spin too fast if it's a persistent error
+            time.sleep(0.5)
+            # Clear active buffer to try and recover
+            active_buffer = []
+            start_time = None
+            continue
+
         t_proc = time.time() - t0
         
         rtf = t_proc / buffer_duration
@@ -588,6 +599,20 @@ def boot_app():
         session.set_output_file(args.output)
         print(f"Transcription will be saved to {args.output}")
     
+    # Register status callback to broadcast engine events (like fallback)
+    def engine_status_callback(status_type, data):
+        logger.info(f"Engine status change: {status_type} - {data.get('message')}")
+        try:
+            broadcast_queue.put({
+                "type": "status",
+                "status": status_type,
+                "data": data
+            })
+        except Exception as e:
+            logger.error(f"Failed to broadcast status: {e}")
+            
+    set_status_callback(engine_status_callback)
+
     # Load Whisper model
     load_model()
     

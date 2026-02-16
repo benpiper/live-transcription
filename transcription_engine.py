@@ -186,14 +186,31 @@ def _reload_on_cpu(reason=""):
     Emergency fallback: reload model on CPU.
     
     Called when GPU fails at load time or during transcription.
+    
+    Returns:
+        True if fallback was successful, False otherwise.
     """
     global model, _active_device, _is_fallback, _fallback_count
     
+    # Check if this is a known CUDA OOM error
+    is_oom = "out of memory" in reason.lower() or "CUDA_ERROR_OUT_OF_MEMORY" in reason
+    
     msg = f"⚠️  Falling back to CPU"
-    if reason:
+    if is_oom:
+        msg = f"❌ GPU Out of Memory: {msg}"
+    elif reason:
         msg += f": {reason}"
+    
     print(msg)
     logger.warning(msg)
+    
+    # Broadcast status if possible
+    # Note: We'll push this through a global callback or the real_time_transcription loop will handle it
+    _notify_status_change("fallback", {
+        "reason": "oom" if is_oom else "error",
+        "message": msg,
+        "detail": reason
+    })
     
     # Clean up failed GPU model
     try:
@@ -216,6 +233,23 @@ def _reload_on_cpu(reason=""):
     
     print(f"✅ Running on CPU fallback (recovery will be attempted periodically)")
     logger.info(f"CPU fallback active (fallback #{_fallback_count})")
+    return True
+
+
+_status_callback = None
+
+def set_status_callback(callback):
+    """Set a callback for status changes (e.g. fallback)."""
+    global _status_callback
+    _status_callback = callback
+
+def _notify_status_change(status_type, data):
+    """Internal helper to notify of status changes."""
+    if _status_callback:
+        try:
+            _status_callback(status_type, data)
+        except Exception as e:
+            logger.error(f"Error in status callback: {e}")
 
 
 def load_model():
@@ -352,7 +386,7 @@ def transcribe_chunk(
 
     # Transcribe (with GPU fallback on runtime error)
     try:
-        segments, info = model.transcribe(
+        segments_gen, info = model.transcribe(
             audio_flat,
             language="en",
             beam_size=preset_beam,
@@ -366,14 +400,16 @@ def transcribe_chunk(
                 "min_silence_duration_ms": settings.get("min_silence_duration_ms", 500)
             }
         )
+        # Force execution of the generator to catch any CUDA OOM during transcription
+        segments = list(segments_gen)
     except Exception as e:
         if _active_device == "cuda":
-            logger.error(f"GPU transcription failed: {e}")
+            logger.error(f"GPU transcription failed (lazy execution catch): {e}")
             _reload_on_cpu(reason=str(e))
             # Retry once on CPU
             try:
                 _, retry_beam, _ = _apply_preset("cpu")
-                segments, info = model.transcribe(
+                segments_gen, info = model.transcribe(
                     audio_flat,
                     language="en",
                     beam_size=retry_beam,
@@ -387,6 +423,7 @@ def transcribe_chunk(
                         "min_silence_duration_ms": settings.get("min_silence_duration_ms", 500)
                     }
                 )
+                segments = list(segments_gen)
             except Exception as retry_err:
                 logger.error(f"CPU retry also failed: {retry_err}")
                 return _get_context_tail(audio_flat)

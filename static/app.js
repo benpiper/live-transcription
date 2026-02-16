@@ -9,6 +9,7 @@ const latencyStat = document.getElementById('latency-stat');
 const processTimeStat = document.getElementById('process-time-stat');
 const bufferSizeStat = document.getElementById('buffer-size-stat');
 const silentAudio = document.getElementById('silent-audio');
+const alertsContainer = document.getElementById('system-alerts');
 
 let ws;
 let audioCtx;
@@ -407,6 +408,12 @@ function connect() {
                         volStatus.textContent = data.peak > 0.004 ? 'Active' : 'Quiet';
                         lastVolumeUpdateTime = now;
                     }
+                } else if (data.type === 'status') {
+                    console.log("Received status update:", data.status, data.data);
+                    if (data.status === 'fallback') {
+                        const level = data.data.reason === 'oom' ? 'error' : 'warning';
+                        showSystemAlert(level, data.data.message, data.data.detail);
+                    }
                 }
             } catch (e) {
                 console.error("Error parsing JSON message:", e);
@@ -505,6 +512,36 @@ function triggerNotification(text) {
         } catch (e) {
             console.error("Failed to show notification:", e);
         }
+    }
+}
+
+function showSystemAlert(level, message, detail = "") {
+    if (!alertsContainer) return;
+
+    const alertId = `alert-${Date.now()}`;
+    const alert = document.createElement('div');
+    alert.className = `alert-item ${level}`;
+    alert.id = alertId;
+
+    const icon = level === 'error' ? '❌' : '⚠️';
+
+    alert.innerHTML = `
+        <span class="alert-icon">${icon}</span>
+        <div class="alert-content">
+            <strong>${message}</strong>
+            ${detail ? `<p style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">${detail}</p>` : ''}
+        </div>
+        <button class="alert-close" onclick="this.parentElement.remove()" title="Dismiss">&times;</button>
+    `;
+
+    // Add to container
+    alertsContainer.appendChild(alert);
+
+    // Auto-dismiss warnings after 10 seconds, but keep errors
+    if (level === 'warning') {
+        setTimeout(() => {
+            if (alert.parentElement) alert.remove();
+        }, 10000);
     }
 }
 
