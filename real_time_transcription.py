@@ -616,6 +616,17 @@ def boot_app():
     # Load Whisper model
     load_model()
     
+    # Broadcast initial engine status
+    try:
+        from transcription_engine import get_engine_status
+        broadcast_queue.put({
+            "type": "status",
+            "status": "engine",
+            "data": get_engine_status()
+        })
+    except Exception as e:
+        logger.error(f"Failed to broadcast initial engine status: {e}")
+    
     # Start processing threads
     threading.Thread(target=visualizer, daemon=True).start()
     transcription_thread = threading.Thread(target=transcribe_audio_loop, daemon=True)

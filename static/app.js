@@ -7,6 +7,7 @@ const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 const latencyStat = document.getElementById('latency-stat');
 const processTimeStat = document.getElementById('process-time-stat');
+const engineStat = document.getElementById('engine-stat');
 const bufferSizeStat = document.getElementById('buffer-size-stat');
 const silentAudio = document.getElementById('silent-audio');
 const alertsContainer = document.getElementById('system-alerts');
@@ -326,6 +327,41 @@ async function updateBufferStatus() {
     }
 }
 
+async function updateEngineStatus() {
+    try {
+        const response = await fetch('/api/engine/status');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const status = await response.json();
+        updateEngineUI(status);
+    } catch (err) {
+        console.warn("Failed to fetch engine status:", err);
+        engineStat.textContent = '---';
+    }
+}
+
+function updateEngineUI(status) {
+    if (!engineStat) return;
+
+    const device = status.device ? status.device.toUpperCase() : '---';
+    engineStat.textContent = device;
+
+    // Apply styling based on device and fallback state
+    engineStat.classList.remove('engine-gpu', 'engine-cpu', 'engine-fallback');
+
+    if (status.device === 'cuda') {
+        engineStat.classList.add('engine-gpu');
+        engineStat.title = `Running on GPU (${status.compute_type})`;
+    } else if (status.device === 'cpu') {
+        engineStat.classList.add('engine-cpu');
+        if (status.is_fallback) {
+            engineStat.classList.add('engine-fallback');
+            engineStat.title = `Running on CPU Fallback (GPU failed: ${status.fallback_count} times)`;
+        } else {
+            engineStat.title = `Running on CPU (${status.compute_type})`;
+        }
+    }
+}
+
 function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -350,6 +386,9 @@ function connect() {
 
         // Initialize Media Session metadata
         setupMediaSession();
+
+        // Initial fetch of engine status
+        updateEngineStatus();
 
         // Start fetching buffer status periodically (every 60 seconds)
         updateBufferStatus();  // Initial fetch
@@ -413,6 +452,10 @@ function connect() {
                     if (data.status === 'fallback') {
                         const level = data.data.reason === 'oom' ? 'error' : 'warning';
                         showSystemAlert(level, data.data.message, data.data.detail);
+                        // Refresh engine status on fallback
+                        updateEngineStatus();
+                    } else if (data.status === 'engine') {
+                        updateEngineUI(data.data);
                     }
                 }
             } catch (e) {

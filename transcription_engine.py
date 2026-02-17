@@ -124,6 +124,26 @@ def is_in_fallback():
     return _is_fallback
 
 
+def get_engine_status():
+    """
+    Get current engine state (device, fallback status, etc.).
+    """
+    settings = TRANSCRIPTION_CONFIG["settings"]
+    model_size = settings.get("model_size", "medium.en")
+    
+    # Get active compute type
+    compute_type, _, _ = _apply_preset(_active_device or "cpu")
+    
+    return {
+        "device": _active_device,
+        "intended_device": _intended_device,
+        "is_fallback": _is_fallback,
+        "model_size": model_size,
+        "compute_type": compute_type,
+        "fallback_count": _fallback_count
+    }
+
+
 def _apply_preset(device):
     """
     Get effective settings by merging device preset with user config.

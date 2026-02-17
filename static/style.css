@@ -698,6 +698,26 @@ canvas {
     outline-offset: 2px;
 }
 
+#latency-stat, #process-time-stat, #buffer-size-stat, #engine-stat {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.engine-gpu {
+    color: #4ade80 !important; /* Green */
+}
+
+.engine-cpu {
+    color: #fbbf24 !important; /* Amber */
+}
+
+.engine-fallback {
+    color: #f87171 !important; /* Red */
+    text-decoration: underline dotted;
+    cursor: help;
+}
+
 .match-counter {
     font-size: 0.8rem;
     font-weight: 600;

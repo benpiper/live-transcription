@@ -241,3 +241,23 @@ class SessionRolloverStatus(BaseModel):
                 "will_rollover_by": None
             }
         }
+class EngineStatusResponse(BaseModel):
+    """Transcription engine processing status."""
+    device: str = Field(..., description="Currently active device ('cuda' or 'cpu')")
+    intended_device: str = Field(..., description="The device intended to be used")
+    is_fallback: bool = Field(..., description="Whether the engine is currently in fallback mode")
+    model_size: str = Field(..., description="The size of the Whisper model being used")
+    compute_type: str = Field(..., description="The precision used for computation")
+    fallback_count: int = Field(..., description="Number of times fallback has occurred")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "device": "cuda",
+                "intended_device": "cuda",
+                "is_fallback": False,
+                "model_size": "medium.en",
+                "compute_type": "int8_float16",
+                "fallback_count": 0
+            }
+        }

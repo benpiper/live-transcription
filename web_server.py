@@ -31,6 +31,7 @@ from models import (
     ArchiveSessionResponse,
     RestoreSessionResponse,
     SessionRolloverStatus,
+    EngineStatusResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,17 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
             "status": "ok",
             "connections": len(ws_manager.active_connections)
         }
+
+    @app.get("/api/engine/status", response_model=EngineStatusResponse, tags=["health"])
+    async def get_engine_status_endpoint():
+        """
+        Get the current transcription engine status.
+        
+        Returns details about the active processing device (CPU/GPU), 
+        fallback status, and model configuration.
+        """
+        from transcription_engine import get_engine_status
+        return get_engine_status()
 
     @app.websocket("/ws", name="websocket")
     async def websocket_endpoint(websocket: WebSocket):
