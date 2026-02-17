@@ -14,6 +14,8 @@ A high-performance, real-time audio transcription tool using the `faster-whisper
 - **Custom Vocabulary & Corrections**: Bias the AI toward specific terms and apply automated phonetic corrections via a JSON config file.
 - **HTTPS & Secure WebSockets**: Optional SSL support for secure web dashboard access and data streaming.
 - **GPU/CPU Presets & Fallback**: Device-optimized presets with automatic GPU→CPU fallback on errors and periodic GPU recovery.
+- **Processing Device Indicator**: Real-time display of the active hardware (GPU/CPU) and fallback status on the dashboard.
+- **Audio Processing Pipeline**: Built-in dynamic range compression and automatic gain control for improved playback clarity.
 - **File Output**: Automatically save all transcriptions to a text file with real-time flushing.
 
 ## 🛠 Prerequisites
@@ -95,6 +97,7 @@ python3 real_time_transcription.py --list-sessions
 | GET | `/api/sessions/{name}` | Get session transcripts |
 | POST | `/api/sessions/{name}/save` | Save current session |
 | DELETE | `/api/sessions/{name}` | Delete session |
+| GET | `/api/engine/status` | Get transcription engine status (device, fallback, etc.) |
 
 Sessions are stored as JSON files in the `sessions/` directory.
 
