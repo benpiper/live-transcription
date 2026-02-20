@@ -449,13 +449,26 @@ function connect() {
                     }
                 } else if (data.type === 'status') {
                     console.log("Received status update:", data.status, data.data);
+
+                    // Handle different status types
                     if (data.status === 'fallback') {
                         const level = data.data.reason === 'oom' ? 'error' : 'warning';
                         showSystemAlert(level, data.data.message, data.data.detail);
-                        // Refresh engine status on fallback
-                        updateEngineStatus();
+                    } else if (data.status === 'recovery') {
+                        if (data.data.recovered) {
+                            showSystemAlert('success', 'GPU Recovery', 'Successfully recovered to CUDA acceleration');
+                        }
+                    } else if (data.status === 'probe') {
+                        // Periodic probe status - just log for debugging
+                        console.debug(`GPU recovery probe executed (interval: ${data.data.probe_interval_sec}s)`);
                     } else if (data.status === 'engine') {
-                        updateEngineUI(data.data);
+                        // Explicit engine status broadcast (startup)
+                        console.debug("Initial engine status broadcast");
+                    }
+
+                    // Update UI with engine status if available in the enriched data
+                    if (data.data && data.data.engine_status) {
+                        updateEngineUI(data.data.engine_status);
                     }
                 }
             } catch (e) {

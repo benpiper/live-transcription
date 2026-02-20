@@ -1481,6 +1481,28 @@ input[type="range"]:focus-visible {
         margin-bottom: 8px;
     }
 
+    .transcript-item.continuation {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        border-left: 2px solid var(--border);
+        padding-left: 8px;
+    }
+
+    .transcript-item.continuation .transcript-header {
+        order: 2; /* Metadata below text */
+        margin-top: 2px;
+        opacity: 0.8;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .transcript-item.continuation .transcript-text {
+        order: 1; /* Text first */
+        width: 100%;
+        padding-top: 0;
+    }
+
     /* Mobile button sizing - full touch-friendly targets */
     .btn-icon {
         width: 48px;

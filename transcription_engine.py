@@ -264,10 +264,18 @@ def set_status_callback(callback):
     _status_callback = callback
 
 def _notify_status_change(status_type, data):
-    """Internal helper to notify of status changes."""
+    """Internal helper to notify of status changes.
+
+    Enriches the status data with full engine status for UI updates.
+    """
     if _status_callback:
+        # Merge current engine status with event data for complete UI updates
+        enriched_data = {
+            **data,
+            "engine_status": get_engine_status()
+        }
         try:
-            _status_callback(status_type, data)
+            _status_callback(status_type, enriched_data)
         except Exception as e:
             logger.error(f"Error in status callback: {e}")
 
@@ -632,12 +640,15 @@ def _try_recover_gpu():
         return
     
     _last_gpu_probe_time = now
-    
+
+    # Broadcast current engine status at probe time (aligned with recovery attempts)
+    _notify_status_change("probe", {"probe_interval_sec": recovery_interval})
+
     # Check if CUDA is available
     if not torch.cuda.is_available():
         logger.debug("GPU recovery probe: CUDA still unavailable")
         return
-    
+
     logger.info("GPU recovery probe: CUDA available, attempting model reload on GPU...")
     print("🔄 Attempting GPU recovery...")
     
@@ -650,14 +661,17 @@ def _try_recover_gpu():
         model = new_model
         _active_device = "cuda"
         _is_fallback = False
-        
+
         # Clean up old CPU model
         del old_model
         import gc
         gc.collect()
-        
+
         print("✅ GPU recovered! Switched back to CUDA.")
         logger.info("GPU recovery successful — now running on CUDA")
+
+        # Broadcast recovery event to UI (status now updated to GPU)
+        _notify_status_change("recovery", {"recovered": True, "message": "Successfully recovered to GPU"})
         
     except Exception as e:
         logger.warning(f"GPU recovery failed, staying on CPU: {e}")
