@@ -50,29 +50,50 @@ class AudioBufferManager:
 
         # Clean up old chunks
         now = time.time() + self.client_to_server_offset
+        removed_count = 0
         while self.audio_chunks and self.audio_chunks[0][0] < now - self.buffer_seconds:
             self.audio_chunks.popleft()
+            removed_count += 1
+
+        if removed_count > 0 and removed_count % 100 == 0:
+            logger.debug(f"Audio buffer cleanup: removed {removed_count} old chunks, buffer size now {len(self.audio_chunks)}")
 
     def sync_with_transcript(self, origin_time: float, client_receive_time: float):
         """Synchronize with transcript timestamp to calibrate offset."""
         new_offset = origin_time - client_receive_time
+        self.recent_syncs.append((time.time(), new_offset))
 
         if not self.offset_initialized:
             self.client_to_server_offset = new_offset
             self.offset_initialized = True
-            self.recent_syncs.append((time.time(), new_offset))
             logger.debug(f"Audio sync initialized: offset={new_offset:.3f}s")
         else:
+            # Skip first 3 syncs to allow initialization noise to settle
+            if len(self.recent_syncs) <= 3:
+                logger.debug(f"Audio sync sampling #{len(self.recent_syncs)}: offset={new_offset:.3f}s (initialization phase)")
+                return
+
             # Check for drift
             offset_change = abs(new_offset - self.client_to_server_offset)
             if offset_change > self.resync_threshold:
-                logger.debug(f"Audio offset drift detected: {offset_change:.3f}s, updating from {self.client_to_server_offset:.3f}s to {new_offset:.3f}s")
+                logger.warning(f"Audio offset drift detected: {offset_change:.3f}s, updating from {self.client_to_server_offset:.3f}s to {new_offset:.3f}s")
+                logger.debug(f"Recent sync history (last 5): {[(t-time.time(), o) for t, o in list(self.recent_syncs)[-5:]]}")
                 self.client_to_server_offset = new_offset
-
-            self.recent_syncs.append((time.time(), new_offset))
+            elif offset_change > 0.05:  # Log small drifts as debug
+                logger.debug(f"Audio offset drift (small): {offset_change:.3f}s, current offset={self.client_to_server_offset:.3f}s")
 
     def extract_clip(self, origin_time: float, duration: float, padding: float = 0.5) -> bytes:
-        """Extract audio clip for time range with padding."""
+        """
+        Extract audio clip for time range with padding.
+
+        Args:
+            origin_time: Timestamp of the segment
+            duration: Duration of the segment in seconds
+            padding: Seconds to add before and after the segment
+
+        Returns:
+            WAV audio bytes or None if insufficient audio data available
+        """
         start_time = origin_time - padding
         end_time = origin_time + duration + padding
 
@@ -87,15 +108,23 @@ class AudioBufferManager:
                 matching_chunks.append(chunk)
 
         if not matching_chunks:
-            logger.warning(f"No audio chunks found for time range {start_time:.2f}-{end_time:.2f}")
+            logger.warning(f"No audio chunks found for time range {start_time:.2f}-{end_time:.2f}s, buffer has {len(self.audio_chunks)} chunks")
             return None
 
         try:
             audio_data = b"".join(matching_chunks)
             samples = np.frombuffer(audio_data, dtype=np.float32)
 
-            # Convert to 16-bit PCM for WAV
-            pcm_samples = (samples * 32767).astype(np.int16)
+            if len(samples) == 0:
+                logger.warning(f"Audio extraction produced empty sample buffer")
+                return None
+
+            # Convert to 16-bit PCM for WAV with clipping to prevent distortion
+            pcm_samples = np.clip(samples * 32767, -32768, 32767).astype(np.int16)
+
+            # Verify conversion didn't produce all zeros
+            if np.all(pcm_samples == 0):
+                logger.warning(f"Audio conversion produced silent clip, original samples min/max: {samples.min():.6f}/{samples.max():.6f}")
 
             byte_io = io.BytesIO()
             with wave.open(byte_io, "wb") as wav_file:
@@ -104,9 +133,19 @@ class AudioBufferManager:
                 wav_file.setframerate(SAMPLE_RATE)
                 wav_file.writeframes(pcm_samples.tobytes())
 
-            return byte_io.getvalue()
+            wav_data = byte_io.getvalue()
+
+            # Verify WAV is valid by checking minimum WAV header size (44 bytes)
+            if len(wav_data) < 44:
+                logger.error(f"Generated WAV is too small ({len(wav_data)} bytes, expected >= 44)")
+                return None
+
+            # Log clip info
+            logger.debug(f"Audio clip extracted: {len(wav_data)} bytes, {len(samples)} samples, duration ~{len(samples)/SAMPLE_RATE:.2f}s")
+            return wav_data
+
         except Exception as e:
-            logger.error(f"Failed to generate audio clip: {e}")
+            logger.error(f"Failed to generate audio clip: {e}", exc_info=True)
             return None
 
 
@@ -368,6 +407,33 @@ class EmailAlertTool:
         if (has_user and not has_pass) or (has_pass and not has_user):
             errors.append("Both username and password must be provided together, or neither")
 
+        # Validate audio attachment configuration
+        audio = self.config.get("audio", {})
+        if audio:
+            # Validate extraction_padding_seconds
+            padding = audio.get("extraction_padding_seconds")
+            if padding is not None:
+                if not isinstance(padding, (int, float)) or padding < 0 or padding > 5.0:
+                    errors.append("audio.extraction_padding_seconds must be a number between 0 and 5.0 seconds")
+
+            # Validate buffer_seconds
+            buffer_sec = audio.get("buffer_seconds")
+            if buffer_sec is not None:
+                if not isinstance(buffer_sec, int) or buffer_sec < 30 or buffer_sec > 3600:
+                    errors.append("audio.buffer_seconds must be an integer between 30 and 3600 seconds")
+
+            # Validate resync_threshold_seconds
+            resync = audio.get("resync_threshold_seconds")
+            if resync is not None:
+                if not isinstance(resync, (int, float)) or resync < 0 or resync > 1.0:
+                    errors.append("audio.resync_threshold_seconds must be a number between 0 and 1.0 seconds")
+
+            # Validate max_size_mb
+            max_size = audio.get("max_size_mb")
+            if max_size is not None:
+                if not isinstance(max_size, (int, float)) or max_size < 1 or max_size > 100:
+                    errors.append("audio.max_size_mb must be a number between 1 and 100 MB")
+
         # Log validation results
         if errors:
             for err in errors:
@@ -481,25 +547,52 @@ class EmailAlertTool:
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
-        # Handle audio attachment (either bytes or temp file path)
+        # Handle audio attachment (either bytes or temp file path) with size validation
         audio_clip_path = None
+        audio_config = self.config.get("audio", {})
+        max_audio_size_mb = audio_config.get("max_size_mb", 25)
+        max_audio_size_bytes = max_audio_size_mb * 1024 * 1024
+
         if audio_clip:
+            audio_attached = False
+            audio_size = 0
+
             if isinstance(audio_clip, bytes):
-                filename = f"alert_{int(time.time())}.wav"
-                attachment = MIMEApplication(audio_clip, _subtype="wav")
-                attachment.add_header('Content-Disposition', 'attachment', filename=filename)
-                msg.attach(attachment)
+                audio_size = len(audio_clip)
+                if audio_size > max_audio_size_bytes:
+                    logger.error(f"Audio clip size ({audio_size/1024/1024:.1f}MB) exceeds limit ({max_audio_size_mb}MB), not attaching")
+                    body += f"\n\n[Note: Audio clip was {audio_size/1024/1024:.1f}MB and exceeded the {max_audio_size_mb}MB size limit for email attachment]"
+                    msg.clear()
+                    msg.attach(MIMEText(body, 'plain'))
+                else:
+                    filename = f"alert_{int(time.time())}.wav"
+                    attachment = MIMEApplication(audio_clip, _subtype="wav")
+                    attachment.add_header('Content-Disposition', 'attachment', filename=filename)
+                    msg.attach(attachment)
+                    audio_attached = True
+
             elif isinstance(audio_clip, str) and os.path.exists(audio_clip):
                 audio_clip_path = audio_clip
                 try:
-                    with open(audio_clip, "rb") as f:
-                        audio_data = f.read()
-                    filename = os.path.basename(audio_clip)
-                    attachment = MIMEApplication(audio_data, _subtype="wav")
-                    attachment.add_header('Content-Disposition', 'attachment', filename=filename)
-                    msg.attach(attachment)
+                    audio_size = os.path.getsize(audio_clip)
+                    if audio_size > max_audio_size_bytes:
+                        logger.error(f"Audio file size ({audio_size/1024/1024:.1f}MB) exceeds limit ({max_audio_size_mb}MB), not attaching")
+                        body += f"\n\n[Note: Audio clip was {audio_size/1024/1024:.1f}MB and exceeded the {max_audio_size_mb}MB size limit for email attachment]"
+                        msg.clear()
+                        msg.attach(MIMEText(body, 'plain'))
+                    else:
+                        with open(audio_clip, "rb") as f:
+                            audio_data = f.read()
+                        filename = os.path.basename(audio_clip)
+                        attachment = MIMEApplication(audio_data, _subtype="wav")
+                        attachment.add_header('Content-Disposition', 'attachment', filename=filename)
+                        msg.attach(attachment)
+                        audio_attached = True
                 except Exception as e:
                     logger.error(f"Failed to attach audio file {audio_clip}: {e}")
+                    body += f"\n\n[Note: Audio clip attachment failed: {str(e)}]"
+                    msg.clear()
+                    msg.attach(MIMEText(body, 'plain'))
 
         try:
             server = smtplib.SMTP(smtp_config["server"], smtp_config["port"])

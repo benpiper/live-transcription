@@ -519,6 +519,89 @@ python3 email_alert.py --test
 - Email includes rule metadata: description, match_type, confidence, speaker
 - Use `AlertRuleEngine.test_rule()` to test patterns without affecting dedup
 
+### Email Alert Audio Attachments
+
+The email alert system can automatically extract and attach audio clips from the transcription stream for each triggered alert.
+
+**Audio Attachment Configuration** (in `email_config.json`):
+
+```json
+{
+  "alerts": {
+    "attach_audio": true
+  },
+  "audio": {
+    "buffer_seconds": 120,
+    "resync_threshold_seconds": 0.5,
+    "extraction_padding_seconds": 0.5,
+    "max_size_mb": 25
+  }
+}
+```
+
+**Configuration Fields:**
+
+| Field | Type | Default | Range | Description |
+|-------|------|---------|-------|-------------|
+| `attach_audio` | bool | false | - | Enable/disable audio attachment for all alerts |
+| `buffer_seconds` | int | 120 | 30-3600 | Audio history buffer size (seconds) |
+| `resync_threshold_seconds` | float | 0.5 | 0-1.0 | Tolerance for timestamp drift before resyncing (seconds) |
+| `extraction_padding_seconds` | float | 0.5 | 0-5.0 | Audio padding before and after segment (seconds) |
+| `max_size_mb` | int | 25 | 1-100 | Maximum attachment size in megabytes |
+
+**How It Works:**
+
+1. **Audio Streaming**: Audio chunks from the transcription server are streamed to `email_alert.py` via WebSocket (binary frames)
+2. **Buffering**: `AudioBufferManager` maintains a ring buffer of recent audio (default: 120s = 2 minutes)
+3. **Synchronization**: When transcripts arrive, the system syncs client-side timestamps with server-side `origin_time` to calibrate offset
+4. **Extraction**: When an alert matches, audio is extracted for the time range: `[origin_time - padding, origin_time + duration + padding]`
+5. **Conversion**: Float32 audio is converted to 16-bit PCM WAV format (16kHz mono)
+6. **Attachment**: WAV is checked against `max_size_mb` limit, then attached to email
+
+**Timestamp Synchronization:**
+
+The `AudioBufferManager` automatically detects and corrects clock drift between client and server:
+
+- Initial sync: First transcript timestamp sets the offset
+- Ongoing syncs: New transcripts refine the offset (skips first 3 syncs to avoid initialization noise)
+- Drift detection: If offset changes exceed `resync_threshold_seconds`, a warning is logged
+- Fallback: If no audio is available for requested time range, email is sent without attachment (note added to body)
+
+**Audio Quality:**
+
+- **Format**: WAV (16-bit PCM, mono, 16kHz)
+- **Size**: ~1.9MB per minute of audio
+- **Latency**: <50ms encoding overhead
+- **Clipping protection**: Samples clipped to ±32767 to prevent distortion during float→int conversion
+
+**Edge Cases Handled:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Buffer underrun (no audio at time) | Email sent without attachment, note added to body |
+| Attachment exceeds `max_size_mb` | Attachment skipped, size noted in email body |
+| Audio conversion fails | Error logged, email sent without attachment |
+| Silent segment (samples all zero) | Warning logged, attachment still sent (silence is valid data) |
+| WAV header invalid | Error logged, attachment not sent |
+
+**Monitoring & Debugging:**
+
+Check `email_alert.py` logs for audio-specific messages:
+
+```
+DEBUG Audio clip extracted: 45678 bytes, 73216 samples, duration ~4.57s
+WARNING Audio offset drift detected: 0.123s, updating from -0.500s to -0.377s
+WARNING No audio chunks found for time range 123.45-124.95s, buffer has 234 chunks
+ERROR Audio clip size (35.5MB) exceeds limit (25MB), not attaching
+```
+
+**Retry Queue & Persistence:**
+
+- Failed emails are queued with audio attachment path preserved
+- Audio files stored in `/tmp/` with prefix `email_alert_*.wav`
+- Cleanup happens automatically when emails are marked successful or dropped from queue
+- Manual cleanup: `email_alert.py` → `EmailRetryQueue.cleanup_old_audio_files()`
+
 ## Important Notes
 
 - **GPU Memory**: Large Whisper models (`large-v3`) require ~4GB VRAM. Use `int8_float16` compute type to reduce usage.
