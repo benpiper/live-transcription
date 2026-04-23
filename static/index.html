@@ -11,9 +11,27 @@
 </head>
 
 <body>
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Authentication Required</h2>
+            <form id="login-form">
+                <div class="input-group">
+                    <input type="text" id="login-username" placeholder="Username" required>
+                </div>
+                <div class="input-group" style="margin-top: 10px;">
+                    <input type="password" id="login-password" placeholder="Password" required>
+                </div>
+                <div id="login-error" class="error-message" style="display: none; color: #ff4a4a; margin-top: 10px; font-size: 0.9em;"></div>
+                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 20px;">Login</button>
+            </form>
+        </div>
+    </div>
+
     <div class="dashboard">
         <header>
             <div class="header-left">
+                <button id="logout-btn" class="btn-text" style="margin-right: 15px;" title="Logout">Logout</button>
                 <h1>Live Stream</h1>
                 <div id="status-badge" class="badge">Disconnected</div>
             </div>

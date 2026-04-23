@@ -179,6 +179,14 @@ class SessionComparisonResponse(BaseModel):
         }
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
 class HealthCheckResponse(BaseModel):
     """Response for health check endpoint."""
     status: str = Field(..., description="Health status")

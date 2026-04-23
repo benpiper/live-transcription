@@ -41,7 +41,9 @@ def client(audio_buffer_test):
     """Create a FastAPI test client."""
     # Patch audio_buffer in web_server before creating app
     with patch('audio_buffer.audio_buffer', audio_buffer_test):
+        from web_server import create_app, get_current_user
         app = create_app()
+        app.dependency_overrides[get_current_user] = lambda: "admin"
         from fastapi.testclient import TestClient
         yield TestClient(app)
 
@@ -72,7 +74,9 @@ def test_buffer_status_empty_buffer(client):
     """Test buffer status with empty buffer."""
     empty_buffer = AudioBuffer(window_size_sec=100.0)
     with patch('audio_buffer.audio_buffer', empty_buffer):
+        from web_server import create_app, get_current_user
         app = create_app()
+        app.dependency_overrides[get_current_user] = lambda: "admin"
         from fastapi.testclient import TestClient
         test_client = TestClient(app)
 

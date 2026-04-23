@@ -111,5 +111,13 @@
         "archive_dir": "archive",
         "archive_old_sessions": false,
         "archive_age_days": 30
+    },
+    "security": {
+        "jwt_secret_key": "YOUR_SUPER_SECRET_KEY_CHANGE_THIS_IN_PRODUCTION",
+        "jwt_algorithm": "HS256",
+        "jwt_expiration_minutes": 1440,
+        "admin_username": "admin",
+        "admin_password": "password",
+        "cors_origins": ["*"]
     }
 }

@@ -1,3 +1,97 @@
+
+// Configuration for split deployment (Render frontend -> On-prem backend)
+// Ensure to update this variable when deploying
+const BACKEND_URL = window.location.hostname === 'localhost' ? '' : 'https://YOUR_ON_PREM_BACKEND_URL.com';
+
+
+// Authentication logic
+const loginModal = document.getElementById('login-modal');
+const loginForm = document.getElementById('login-form');
+const loginError = document.getElementById('login-error');
+const logoutBtn = document.getElementById('logout-btn');
+
+function getAuthToken() {
+    return localStorage.getItem('access_token');
+}
+
+function setAuthToken(token) {
+    localStorage.setItem('access_token', token);
+}
+
+function clearAuthToken() {
+    localStorage.removeItem('access_token');
+}
+
+function showLoginModal() {
+    loginModal.classList.remove('hidden');
+}
+
+function hideLoginModal() {
+    loginModal.classList.add('hidden');
+}
+
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            setAuthToken(data.access_token);
+            hideLoginModal();
+            loginError.style.display = 'none';
+            // Reconnect everything
+            connect();
+            loadCurrentSession();
+        } else {
+            loginError.textContent = 'Invalid username or password';
+            loginError.style.display = 'block';
+        }
+    } catch (err) {
+        loginError.textContent = 'Login failed. Try again.';
+        loginError.style.display = 'block';
+    }
+});
+
+logoutBtn.addEventListener('click', () => {
+    clearAuthToken();
+    if (ws) ws.close();
+    showLoginModal();
+});
+
+// Wrap fetch to include auth token
+const originalFetch = window.fetch;
+window.fetch = async function() {
+    let [resource, config] = arguments;
+
+    // Prefix relative API routes with BACKEND_URL
+    if (typeof resource === 'string' && resource.startsWith('/api')) {
+        resource = `${BACKEND_URL}${resource}`;
+    }
+
+    if (!config) config = {};
+    if (!config.headers) config.headers = {};
+
+    const token = getAuthToken();
+    if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await originalFetch(resource, config);
+    if (response.status === 401 && !resource.endsWith('/api/login')) {
+        showLoginModal();
+    }
+    return response;
+};
+
+
 const transcriptFeed = document.getElementById('transcript-feed');
 const statusBadge = document.getElementById('status-badge');
 const audioToggle = document.getElementById('audio-toggle');
@@ -363,8 +457,21 @@ function updateEngineUI(status) {
 }
 
 function connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let host = window.location.host;
+
+    if (BACKEND_URL) {
+        const urlObj = new URL(BACKEND_URL);
+        protocol = urlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+        host = urlObj.host;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+        showLoginModal();
+        return;
+    }
+    const wsUrl = `${protocol}//${host}/ws?token=${token}`;
     console.log("Connecting to WebSocket:", wsUrl);
 
     // Show connecting state

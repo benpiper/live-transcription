@@ -46,6 +46,14 @@ DEFAULT_CONFIG = {
         "archive_dir": "archive",
         "archive_old_sessions": False,
         "archive_age_days": 30
+    },
+    "security": {
+        "jwt_secret_key": "YOUR_SUPER_SECRET_KEY_CHANGE_THIS_IN_PRODUCTION",
+        "jwt_algorithm": "HS256",
+        "jwt_expiration_minutes": 1440,
+        "admin_username": "admin",
+        "admin_password": "password",
+        "cors_origins": ["*"]
     }
 }
 
@@ -79,6 +87,10 @@ def load_config(config_path: str) -> dict:
         if "settings" in user_config:
             TRANSCRIPTION_CONFIG["settings"].update(user_config["settings"])
         
+        # Merge security
+        if "security" in user_config:
+            TRANSCRIPTION_CONFIG["security"].update(user_config["security"])
+
         logger.info(f"Loaded config from {config_path}")
         print(f"Loaded config from {config_path}")
         
@@ -128,6 +140,20 @@ def get_session_management_setting(key: str, default=None):
         The setting value or default
     """
     return TRANSCRIPTION_CONFIG.get("session_management", {}).get(key, default)
+
+
+def get_security_setting(key: str, default=None):
+    """
+    Get a specific security setting value with optional default.
+
+    Args:
+        key: The setting key to retrieve
+        default: Default value if key not found
+
+    Returns:
+        The setting value or default
+    """
+    return TRANSCRIPTION_CONFIG.get("security", {}).get(key, default)
 
 
 def validate_config() -> list:

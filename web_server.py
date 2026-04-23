@@ -11,7 +11,7 @@ import queue
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 import io
@@ -191,6 +191,20 @@ async def websocket_broadcaster():
     logger.info("WebSocket broadcaster shutting down...")
     await ws_manager.close_all()
 
+
+from fastapi.security import OAuth2PasswordBearer
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    payload = decode_access_token(token)
+    username: str = payload.get("sub")
+    if username is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return username
 
 def create_app(boot_callback=None, input_callback=None) -> FastAPI:
     """
