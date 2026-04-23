@@ -40,10 +40,10 @@ def audio_buffer_test():
 def client(audio_buffer_test):
     """Create a FastAPI test client."""
     # Patch audio_buffer in web_server before creating app
-    with patch('web_server.audio_buffer', audio_buffer_test):
+    with patch('audio_buffer.audio_buffer', audio_buffer_test):
         app = create_app()
         from fastapi.testclient import TestClient
-        return TestClient(app)
+        yield TestClient(app)
 
 
 def test_ping_endpoint(client):
@@ -71,7 +71,7 @@ def test_buffer_status_endpoint(client):
 def test_buffer_status_empty_buffer(client):
     """Test buffer status with empty buffer."""
     empty_buffer = AudioBuffer(window_size_sec=100.0)
-    with patch('web_server.audio_buffer', empty_buffer):
+    with patch('audio_buffer.audio_buffer', empty_buffer):
         app = create_app()
         from fastapi.testclient import TestClient
         test_client = TestClient(app)
@@ -233,7 +233,7 @@ def test_wav_format_validity(client, audio_buffer_test):
     wav_buffer = io.BytesIO(response.content)
     with wave.open(wav_buffer, "rb") as wav_file:
         assert wav_file.getnchannels() == 1  # Mono
-        assert wav_file.getsampwidth() == 4  # 32-bit (4 bytes per sample)
+        assert wav_file.getsampwidth() == 2  # 16-bit PCM (2 bytes per sample)
         assert wav_file.getframerate() == 16000
         frames = wav_file.readframes(-1)
         assert len(frames) > 0
