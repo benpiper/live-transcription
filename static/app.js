@@ -579,7 +579,7 @@ function showSystemAlert(level, message, detail = "") {
     alert.className = `alert-item ${level}`;
     alert.id = alertId;
 
-    const icon = level === 'error' ? '❌' : '⚠️';
+    const icon = level === 'error' ? '❌' : level === 'success' ? '✅' : '⚠️';
 
     alert.innerHTML = `
         <span class="alert-icon">${icon}</span>
@@ -593,11 +593,20 @@ function showSystemAlert(level, message, detail = "") {
     // Add to container
     alertsContainer.appendChild(alert);
 
-    // Auto-dismiss warnings after 10 seconds, but keep errors
-    if (level === 'warning') {
+    // Auto-dismiss based on level
+    let dismissTime = 0;
+    if (level === 'success') {
+        dismissTime = 6000;  // Success alerts dismiss after 6 seconds
+    } else if (level === 'warning') {
+        dismissTime = 10000; // Warnings dismiss after 10 seconds
+    } else if (level === 'error') {
+        dismissTime = 12000; // Errors dismiss after 12 seconds (GPU fallback, etc)
+    }
+
+    if (dismissTime > 0) {
         setTimeout(() => {
             if (alert.parentElement) alert.remove();
-        }, 10000);
+        }, dismissTime);
     }
 }
 
