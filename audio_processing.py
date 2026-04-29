@@ -31,12 +31,18 @@ def initialize_vad():
 
     try:
         import torch
-        _silero_vad_model, utils = torch.hub.load(
-            repo_or_dir='snakers4/silero-vad',
-            model='silero_vad',
-            force_reload=False,
-            trust_repo=True
-        )
+        import warnings
+
+        # Suppress torch.jit.load deprecation warning from inside Silero VAD
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=DeprecationWarning, module='torch.jit._serialization')
+            _silero_vad_model, utils = torch.hub.load(
+                repo_or_dir='snakers4/silero-vad',
+                model='silero_vad',
+                force_reload=False,
+                trust_repo=True
+            )
+
         _silero_vad_utils = utils
         logger.info("Silero VAD model loaded successfully")
         return _silero_vad_model, utils

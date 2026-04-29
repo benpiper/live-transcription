@@ -18,8 +18,8 @@ class TranscriptItem(BaseModel):
     duration: Optional[float] = Field(None, description="Audio duration in seconds")
     origin_time: Optional[float] = Field(None, description="Original Unix timestamp before correction")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "timestamp": "2026-02-08 14:30:45",
                 "speaker": "Speaker 1",
@@ -29,6 +29,7 @@ class TranscriptItem(BaseModel):
                 "origin_time": "2026-02-08 14:30:43"
             }
         }
+    }
 
 
 class SessionMetadata(BaseModel):
@@ -39,8 +40,8 @@ class SessionMetadata(BaseModel):
     transcript_count: int = Field(..., description="Number of transcripts in the session")
     file: Optional[str] = Field(None, description="Filename of the session file")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "name": "Morning Shift",
                 "created_at": "2026-02-08T08:00:00",
@@ -49,6 +50,7 @@ class SessionMetadata(BaseModel):
                 "file": "Morning_Shift.json"
             }
         }
+    }
 
 
 class SessionFull(BaseModel):
@@ -59,8 +61,8 @@ class SessionFull(BaseModel):
     transcript_count: int = Field(..., description="Number of transcripts")
     transcripts: List[TranscriptItem] = Field(default_factory=list, description="List of transcripts")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "name": "Morning Shift",
                 "created_at": "2026-02-08T08:00:00",
@@ -82,6 +84,7 @@ class SessionFull(BaseModel):
                 ]
             }
         }
+    }
 
 
 class SessionListResponse(BaseModel):
@@ -117,14 +120,15 @@ class SessionComparisonRequest(BaseModel):
         description="Optional list of speaker names to filter (only these speakers shown)"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "session_names": ["Morning Shift", "Evening Shift"],
                 "mode": "merged",
                 "speaker_filter": ["Dispatcher A", "Dispatcher B"]
             }
         }
+    }
 
 
 class SessionComparisonStats(BaseModel):
@@ -134,8 +138,8 @@ class SessionComparisonStats(BaseModel):
     session_count: int = Field(..., description="Number of sessions being compared")
     time_range: Optional[dict] = Field(None, description="Earliest and latest timestamps")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "total_transcripts": 2048,
                 "speaker_count": 5,
@@ -146,6 +150,7 @@ class SessionComparisonStats(BaseModel):
                 }
             }
         }
+    }
 
 
 class SessionComparisonResponse(BaseModel):
@@ -155,8 +160,8 @@ class SessionComparisonResponse(BaseModel):
     stats: SessionComparisonStats = Field(..., description="Comparison statistics")
     results: dict = Field(..., description="Comparison results (format depends on mode)")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "mode": "merged",
                 "sessions": ["Morning Shift", "Evening Shift"],
@@ -177,6 +182,7 @@ class SessionComparisonResponse(BaseModel):
                 }
             }
         }
+    }
 
 
 class HealthCheckResponse(BaseModel):
@@ -229,8 +235,8 @@ class SessionRolloverStatus(BaseModel):
     transcripts_until_rollover: Optional[int] = Field(None, description="Transcripts remaining before count-based rollover (if enabled)")
     will_rollover_by: Optional[Literal["time", "count"]] = Field(None, description="What will trigger rollover: 'time', 'count', or None")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "current_session_name": "Morning Shift",
                 "created_at": "2026-02-08T08:00:00",
@@ -241,6 +247,7 @@ class SessionRolloverStatus(BaseModel):
                 "will_rollover_by": None
             }
         }
+    }
 class EngineStatusResponse(BaseModel):
     """Transcription engine processing status."""
     device: str = Field(..., description="Currently active device ('cuda' or 'cpu')")
@@ -250,8 +257,8 @@ class EngineStatusResponse(BaseModel):
     compute_type: str = Field(..., description="The precision used for computation")
     fallback_count: int = Field(..., description="Number of times fallback has occurred")
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "device": "cuda",
                 "intended_device": "cuda",
@@ -261,3 +268,4 @@ class EngineStatusResponse(BaseModel):
                 "fallback_count": 0
             }
         }
+    }
