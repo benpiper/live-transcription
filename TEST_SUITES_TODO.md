@@ -86,8 +86,8 @@
 
 ## 9. Frontend Browser Tests
 
-- [ ] Dashboard loads and initial session fetch renders transcripts.
-- [ ] WebSocket transcript message appends one transcript row.
+- [x] Dashboard loads and initial session fetch renders transcripts.
+- [x] WebSocket transcript message appends one transcript row.
 - [ ] Binary audio message updates visualizer state without crashing.
 - [ ] Speaker filtering hides/shows expected rows.
 - [ ] Watchwords highlight matching transcript text.

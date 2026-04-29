@@ -18,6 +18,12 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
       - name: Install system packages
         run: |
           sudo apt-get update
@@ -31,3 +37,12 @@ jobs:
 
       - name: Run tests
         run: pytest -q tests
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run frontend tests
+        run: npm run test:frontend

@@ -1,0 +1,11 @@
+{
+  "name": "live-transcription",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:frontend": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1"
+  }
+}

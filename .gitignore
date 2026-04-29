@@ -7,6 +7,9 @@ env/
 .env/
 .vscode/
 .idea/
+node_modules/
+playwright-report/
+test-results/
 *.log
 *.mp3
 *.wav
