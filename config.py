@@ -7,6 +7,7 @@ transcription settings from config.json files.
 
 import json
 import logging
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ DEFAULT_CONFIG = {
 }
 
 # Global config instance (will be populated by load_config)
-TRANSCRIPTION_CONFIG = dict(DEFAULT_CONFIG)
+TRANSCRIPTION_CONFIG = copy.deepcopy(DEFAULT_CONFIG)
 
 
 def load_config(config_path: str) -> dict:
@@ -64,6 +65,10 @@ def load_config(config_path: str) -> dict:
         The merged configuration dictionary
     """
     global TRANSCRIPTION_CONFIG
+
+    # Start each load from a fresh deep copy of defaults so repeated loads do
+    # not leak settings through module-level state or mutate DEFAULT_CONFIG.
+    TRANSCRIPTION_CONFIG = copy.deepcopy(DEFAULT_CONFIG)
     
     try:
         with open(config_path, "r") as f:
@@ -78,6 +83,10 @@ def load_config(config_path: str) -> dict:
         # Merge settings (preserve defaults for missing keys)
         if "settings" in user_config:
             TRANSCRIPTION_CONFIG["settings"].update(user_config["settings"])
+
+        # Merge session management settings (preserve defaults for missing keys)
+        if "session_management" in user_config:
+            TRANSCRIPTION_CONFIG["session_management"].update(user_config["session_management"])
         
         logger.info(f"Loaded config from {config_path}")
         print(f"Loaded config from {config_path}")
@@ -220,13 +229,16 @@ def validate_config() -> list:
     # Session management validation
     session_mgmt = TRANSCRIPTION_CONFIG.get("session_management", {})
     try:
-        if session_mgmt.get("rollover_time_hours") and session_mgmt.get("rollover_time_hours") <= 0:
+        rollover_time_hours = session_mgmt.get("rollover_time_hours")
+        if rollover_time_hours is not None and rollover_time_hours <= 0:
             errors.append("rollover_time_hours must be greater than 0")
 
-        if session_mgmt.get("rollover_transcript_count") and session_mgmt.get("rollover_transcript_count") <= 0:
+        rollover_transcript_count = session_mgmt.get("rollover_transcript_count")
+        if rollover_transcript_count is not None and rollover_transcript_count <= 0:
             errors.append("rollover_transcript_count must be greater than 0")
 
-        if session_mgmt.get("archive_age_days") and session_mgmt.get("archive_age_days") <= 0:
+        archive_age_days = session_mgmt.get("archive_age_days")
+        if archive_age_days is not None and archive_age_days <= 0:
             errors.append("archive_age_days must be greater than 0")
     except TypeError:
         errors.append("session_management settings have invalid types")

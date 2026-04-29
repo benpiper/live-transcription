@@ -12,12 +12,12 @@
 
 ## 2. Config Loading And Validation
 
-- [ ] Missing config file uses defaults.
-- [ ] Invalid JSON does not crash.
-- [ ] User settings merge without dropping defaults.
-- [ ] Validation catches invalid types, invalid ranges, bad `device`, and bad `model_size`.
-- [ ] `session_management` validation catches invalid rollover/archive values.
-- [ ] Config isolation between tests, since `TRANSCRIPTION_CONFIG` is global.
+- [x] Missing config file uses defaults.
+- [x] Invalid JSON does not crash.
+- [x] User settings merge without dropping defaults.
+- [x] Validation catches invalid types, invalid ranges, bad `device`, and bad `model_size`.
+- [x] `session_management` validation catches invalid rollover/archive values.
+- [x] Config isolation between tests, since `TRANSCRIPTION_CONFIG` is global.
 
 ## 3. Transcription Engine Unit Tests With Mocked Whisper
 
