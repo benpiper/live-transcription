@@ -577,8 +577,8 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
             # Get audio from buffer
             try:
                 audio_data = audio_buffer.get_audio_range(start_time, end_time)
-                rms = np.sqrt(np.mean(audio_data**2))
-                max_val = np.max(np.abs(audio_data))
+                rms = np.linalg.norm(audio_data) / np.sqrt(len(audio_data)) if len(audio_data) > 0 else 0.0
+                max_val = np.max(np.abs(audio_data)) if len(audio_data) > 0 else 0.0
                 logger.info(f"Audio retrieved: {len(audio_data)} samples ({len(audio_data)/16000:.3f}s), rms={rms:.4f}, max={max_val:.4f}")
 
                 # Check if audio is actually silent
