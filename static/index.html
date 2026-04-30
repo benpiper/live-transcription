@@ -18,11 +18,11 @@
                 <div id="status-badge" class="badge">Disconnected</div>
             </div>
             <div class="header-right">
-                <button id="theme-toggle" class="btn-icon" title="Toggle Light/Dark Mode">
-                    <span id="theme-icon">🌙</span>
+                <button id="theme-toggle" class="btn-icon" title="Toggle Light/Dark Mode" aria-label="Toggle Light/Dark Mode">
+                    <span id="theme-icon" aria-hidden="true">🌙</span>
                 </button>
-                <button id="sidebar-toggle" class="btn-icon" title="Toggle Settings" style="display: none;">
-                    <span>⚙️</span>
+                <button id="sidebar-toggle" class="btn-icon" title="Toggle Settings" aria-label="Toggle Settings" style="display: none;">
+                    <span aria-hidden="true">⚙️</span>
                 </button>
                 <button id="audio-toggle" class="btn-primary">
                     <span class="icon">🔇</span> Enable Audio
@@ -88,8 +88,8 @@
                         <h3>Audio Processing</h3>
                         <div class="header-actions">
                             <button id="audio-processing-reset" class="btn-text">Reset</button>
-                            <button id="audio-processing-collapse" class="btn-icon-small" title="Collapse/Expand">
-                                <span id="audio-processing-collapse-icon">+</span>
+                            <button id="audio-processing-collapse" class="btn-icon-small" title="Collapse/Expand" aria-label="Collapse/Expand Audio Processing">
+                                <span id="audio-processing-collapse-icon" aria-hidden="true">+</span>
                             </button>
                         </div>
                     </div>
@@ -101,35 +101,35 @@
                         <div id="audio-processing-controls">
                             <div class="slider-group">
                                 <div class="slider-header">
-                                    <label>Threshold</label>
+                                    <label for="compressor-threshold">Threshold</label>
                                     <span id="compressor-threshold-val" class="slider-value">-30 dB</span>
                                 </div>
                                 <input type="range" id="compressor-threshold" min="-60" max="0" value="-30" step="1">
                             </div>
                             <div class="slider-group">
                                 <div class="slider-header">
-                                    <label>Ratio</label>
+                                    <label for="compressor-ratio">Ratio</label>
                                     <span id="compressor-ratio-val" class="slider-value">8:1</span>
                                 </div>
                                 <input type="range" id="compressor-ratio" min="1" max="20" value="8" step="0.5">
                             </div>
                             <div class="slider-group">
                                 <div class="slider-header">
-                                    <label>Attack</label>
+                                    <label for="compressor-attack">Attack</label>
                                     <span id="compressor-attack-val" class="slider-value">5 ms</span>
                                 </div>
                                 <input type="range" id="compressor-attack" min="0" max="100" value="5" step="1">
                             </div>
                             <div class="slider-group">
                                 <div class="slider-header">
-                                    <label>Release</label>
+                                    <label for="compressor-release">Release</label>
                                     <span id="compressor-release-val" class="slider-value">150 ms</span>
                                 </div>
                                 <input type="range" id="compressor-release" min="10" max="1000" value="150" step="10">
                             </div>
                             <div class="slider-group">
                                 <div class="slider-header">
-                                    <label>Makeup Gain</label>
+                                    <label for="makeup-gain">Makeup Gain</label>
                                     <span id="makeup-gain-val" class="slider-value">1.5×</span>
                                 </div>
                                 <input type="range" id="makeup-gain" min="0.5" max="4.0" value="1.5" step="0.1">
@@ -150,27 +150,27 @@
                         <h3>Watchwords</h3>
                         <div class="header-actions">
                             <button id="clear-watchwords" class="btn-text">Clear All</button>
-                            <button id="watchword-collapse-toggle" class="btn-icon-small" title="Collapse/Expand">
-                                <span id="watchword-collapse-icon">−</span>
+                            <button id="watchword-collapse-toggle" class="btn-icon-small" title="Collapse/Expand" aria-label="Collapse/Expand Watchwords">
+                                <span id="watchword-collapse-icon" aria-hidden="true">−</span>
                             </button>
                         </div>
                     </div>
                     <div id="watchword-content">
                         <div class="input-group">
-                            <input type="text" id="watchword-input" placeholder="Add word or phrase...">
-                            <button id="add-watchword" class="btn-add">+</button>
+                            <input type="text" id="watchword-input" placeholder="Add word or phrase..." aria-label="Add watchword or phrase">
+                            <button id="add-watchword" class="btn-add" aria-label="Add Watchword"><span aria-hidden="true">+</span></button>
                         </div>
                         <div id="watchwords-list" class="tag-list">
                             <!-- Watchword tags will appear here -->
                         </div>
                         <div id="watchword-nav" class="watchword-nav hidden">
                             <div class="nav-controls">
-                                <button id="prev-match" class="btn-nav" title="Previous match">◀</button>
+                                <button id="prev-match" class="btn-nav" title="Previous match" aria-label="Previous match"><span aria-hidden="true">◀</span></button>
                                 <span id="match-counter" class="match-counter">0/0</span>
-                                <button id="next-match" class="btn-nav" title="Next match">▶</button>
+                                <button id="next-match" class="btn-nav" title="Next match" aria-label="Next match"><span aria-hidden="true">▶</span></button>
                             </div>
-                            <button id="filter-matches" class="btn-filter" title="Show only matches">
-                                <span id="filter-icon">👁</span> All
+                            <button id="filter-matches" class="btn-filter" title="Show only matches" aria-label="Toggle show only matches">
+                                <span id="filter-icon" aria-hidden="true">👁</span> All
                             </button>
                         </div>
                         <div id="match-timeline" class="match-timeline hidden">
@@ -188,13 +188,13 @@
                         <button id="reset-filters" class="btn-text">Clear</button>
                     </div>
                     <div class="speaker-dropdown">
-                        <button id="speaker-dropdown-toggle" class="dropdown-toggle">
+                        <button id="speaker-dropdown-toggle" class="dropdown-toggle" aria-expanded="false" aria-controls="speaker-dropdown-menu">
                             <span id="speaker-filter-label">All Speakers</span>
-                            <span class="dropdown-arrow">▼</span>
+                            <span class="dropdown-arrow" aria-hidden="true">▼</span>
                         </button>
                         <div id="speaker-dropdown-menu" class="dropdown-menu hidden">
                             <input type="text" id="speaker-search" class="dropdown-search"
-                                placeholder="Search speakers...">
+                                placeholder="Search speakers..." aria-label="Search speakers">
                             <div class="dropdown-actions">
                                 <button id="select-all-speakers" class="btn-text">Select All</button>
                                 <button id="deselect-all-speakers" class="btn-text">Deselect All</button>

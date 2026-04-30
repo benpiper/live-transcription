@@ -1,0 +1,3 @@
+## 2026-04-30 - [Explicit Label Association for Inputs]
+**Learning:** Found several inputs (sliders and text searches) missing explicit label association. Labels were visually present but lacked `for` attributes pointing to the input `id`s, which impacts screen reader accessibility. Additionally, icon-only buttons lacked `aria-label`s.
+**Action:** Always verify that `<label>` elements have a corresponding `for` attribute mapping to the target input's `id`. If a visible label cannot be used, ensure the input has an `aria-label`. Ensure icon-only buttons have `aria-label` attributes and their visual icons have `aria-hidden="true"`.
