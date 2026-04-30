@@ -1339,6 +1339,15 @@ function addWatchword() {
         renderWatchwords();
         reApplyWatchwordHighlights();
         input.value = '';
+        
+        // Auto-navigate to first match
+        setTimeout(() => {
+            const matches = getMatchedItems();
+            if (matches.length > 0) {
+                currentMatchIndex = 0;
+                jumpToMatch(0);
+            }
+        }, 50);
     }
 }
 
@@ -1396,7 +1405,12 @@ function updateMatchCounter() {
     const nav = document.getElementById('watchword-nav');
     const timeline = document.getElementById('match-timeline');
 
-    if (matches.length === 0) {
+    // Always show counter now (even when 0 matches)
+    const isEmpty = matches.length === 0;
+    counter.textContent = isEmpty ? '0/0' : `${currentMatchIndex + 1}/${matches.length}`;
+    counter.setAttribute('data-empty', isEmpty);
+    
+    if (isEmpty) {
         nav.classList.add('hidden');
         timeline.classList.add('hidden');
         return;
@@ -1408,8 +1422,6 @@ function updateMatchCounter() {
     // Clamp index
     if (currentMatchIndex >= matches.length) currentMatchIndex = matches.length - 1;
     if (currentMatchIndex < 0) currentMatchIndex = 0;
-
-    counter.textContent = `${currentMatchIndex + 1}/${matches.length}`;
 
     // Update button states
     document.getElementById('prev-match').disabled = currentMatchIndex === 0;
@@ -1456,12 +1468,14 @@ function jumpToMatch(index) {
     // Scroll into view with offset
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // Brief highlight pulse
-    target.style.transition = 'box-shadow 0.2s';
-    target.style.boxShadow = '0 0 0 3px var(--primary)';
+    // Enhanced visual feedback: stronger glow effect
+    target.style.transition = 'box-shadow 0.25s ease-out';
+    target.style.boxShadow = '0 0 0 4px var(--primary), 0 0 16px rgba(56, 189, 248, 0.8)';
+    
+    // Brief pulse effect
     setTimeout(() => {
         target.style.boxShadow = '';
-    }, 1000);
+    }, 1500);
 
     updateMatchCounter();
 }

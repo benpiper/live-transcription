@@ -846,6 +846,13 @@ canvas {
     min-width: 50px;
     text-align: center;
     font-family: 'JetBrains Mono', monospace;
+    transition: opacity 0.3s ease, color 0.3s ease;
+}
+
+/* Dim counter when no matches */
+.match-counter[data-empty="true"] {
+    opacity: 0.5;
+    color: var(--text-muted);
 }
 
 
@@ -1270,6 +1277,14 @@ input[type="range"]:focus-visible {
     border-left: 4px solid #f43f5e;
     box-shadow: 0 0 15px rgba(244, 63, 94, 0.1);
     animation: alert-pulse 2s infinite;
+    transition: all 0.3s ease;
+}
+
+/* Current match being navigated to */
+.transcript-item.highlight:focus-within {
+    box-shadow: 0 0 0 4px var(--primary), 0 0 16px rgba(56, 189, 248, 0.8);
+    background: rgba(244, 63, 94, 0.25);
+    border-left-color: #f43f5e;
 }
 
 @keyframes alert-pulse {
