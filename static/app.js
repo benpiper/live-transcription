@@ -534,6 +534,28 @@ function handleAudioData(data) {
     }
 }
 
+function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return unsafe;
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+function escapeJs(unsafe) {
+    if (typeof unsafe !== 'string') return unsafe;
+    return unsafe
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
+        .replace(/</g, "\\x3c")
+        .replace(/>/g, "\\x3e");
+}
+
 function checkWatchwords(text) {
     if (watchwords.length === 0) return false;
     const lowerText = text.toLowerCase();
@@ -541,8 +563,8 @@ function checkWatchwords(text) {
 }
 
 function highlightWatchwords(text) {
-    if (watchwords.length === 0) return text;
-    let result = text;
+    let result = escapeHtml(text || '');
+    if (watchwords.length === 0) return result;
     for (const word of watchwords) {
         const regex = new RegExp(`(${word})`, 'gi');
         result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
@@ -584,8 +606,8 @@ function showSystemAlert(level, message, detail = "") {
     alert.innerHTML = `
         <span class="alert-icon">${icon}</span>
         <div class="alert-content">
-            <strong>${message}</strong>
-            ${detail ? `<p style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">${detail}</p>` : ''}
+            <strong>${escapeHtml(message)}</strong>
+            ${detail ? `<p style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">${escapeHtml(detail)}</p>` : ''}
         </div>
         <button class="alert-close" onclick="this.parentElement.remove()" title="Dismiss">&times;</button>
     `;
@@ -652,15 +674,17 @@ function createTranscriptElement(data, fromSession = false) {
     if (confidence < -0.7) confClass = 'conf-low';
     else if (confidence < -0.6) confClass = 'conf-med';
 
+    const escapedSpeaker = escapeHtml(data.speaker || 'Unknown');
+
     item.innerHTML = `
         <div class="transcript-header">
             <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}"
-                  onclick="filterBySpeaker('${itemSpeaker}')"
-                  onkeydown="if(event.key==='Enter'||event.key===' ')filterBySpeaker('${itemSpeaker}')"
+                  onclick="filterBySpeaker('${escapeHtml(escapeJs(itemSpeaker))}')"
+                  onkeydown="if(event.key==='Enter'||event.key===' ')filterBySpeaker('${escapeHtml(escapeJs(itemSpeaker))}')"
                   tabindex="0"
                   role="button"
-                  aria-label="Filter by speaker ${itemSpeaker}"
-                  title="Click to filter by this speaker">${data.speaker || 'Unknown'}</span>
+                  aria-label="Filter by speaker ${escapeHtml(itemSpeaker)}"
+                  title="Click to filter by this speaker">${escapedSpeaker}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
@@ -770,15 +794,17 @@ function addTranscriptItem(data, fromSession = false) {
     if (confidence < -0.7) confClass = 'conf-low';
     else if (confidence < -0.6) confClass = 'conf-med';
 
+    const escapedSpeaker = escapeHtml(data.speaker || 'Unknown');
+
     item.innerHTML = `
         <div class="transcript-header">
             <span class="speaker ${data.speaker && (data.speaker.includes('Dispatcher') || data.speaker.includes('AI') || data.speaker.includes('Bot')) ? 'robotic' : ''}"
-                  onclick="filterBySpeaker('${itemSpeaker}')"
-                  onkeydown="if(event.key==='Enter'||event.key===' ')filterBySpeaker('${itemSpeaker}')"
+                  onclick="filterBySpeaker('${escapeHtml(escapeJs(itemSpeaker))}')"
+                  onkeydown="if(event.key==='Enter'||event.key===' ')filterBySpeaker('${escapeHtml(escapeJs(itemSpeaker))}')"
                   tabindex="0"
                   role="button"
-                  aria-label="Filter by speaker ${itemSpeaker}"
-                  title="Click to filter by this speaker">${data.speaker || 'Unknown'}</span>
+                  aria-label="Filter by speaker ${escapeHtml(itemSpeaker)}"
+                  title="Click to filter by this speaker">${escapedSpeaker}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
@@ -1297,7 +1323,7 @@ function renderWatchwords() {
         const tag = document.createElement('div');
         tag.className = 'tag';
         tag.innerHTML = `
-            ${word}
+            ${escapeHtml(word)}
             <span class="remove" onclick="removeWatchword(${originalIndex})">×</span>
         `;
         list.appendChild(tag);
