@@ -184,8 +184,10 @@ def normalize_rms(
         np.ndarray: RMS-normalized audio
     """
     try:
-        # Calculate current RMS
-        current_rms = np.sqrt(np.mean(audio_data ** 2))
+        # Calculate current RMS without allocating new arrays
+        if len(audio_data) == 0:
+            return audio_data
+        current_rms = np.linalg.norm(audio_data) / np.sqrt(len(audio_data))
 
         # Avoid division by zero
         if current_rms > 1e-6:

@@ -55,11 +55,19 @@ class AudioBuffer:
 
             # Add the chunk
             self.chunks[timestamp] = audio_data
-            logger.debug(f"Added audio chunk at {timestamp:.3f}, size={len(audio_data)} samples ({audio_data.nbytes} bytes), rms={np.sqrt(np.mean(audio_data**2)):.4f}")
+            rms = np.linalg.norm(audio_data) / np.sqrt(len(audio_data)) if len(audio_data) > 0 else 0.0
+            logger.debug(f"Added audio chunk at {timestamp:.3f}, size={len(audio_data)} samples ({audio_data.nbytes} bytes), rms={rms:.4f}")
 
             # Discard old chunks outside the window
             cutoff_time = timestamp - self.window_size_sec
-            old_keys = [t for t in self.chunks if t < cutoff_time]
+
+            # self.chunks maintains insertion order (chronological) in Python 3.7+
+            old_keys = []
+            for t in self.chunks:
+                if t < cutoff_time:
+                    old_keys.append(t)
+                else:
+                    break
 
             for old_key in old_keys:
                 del self.chunks[old_key]
@@ -89,11 +97,13 @@ class AudioBuffer:
         with self.lock:
             # Find chunks within or overlapping the time range
             # Include chunks that could overlap: chunk_start <= end_time
-            relevant_chunks = [
-                (t, data)
-                for t, data in sorted(self.chunks.items())
-                if t <= end_time and t >= start_time - 1.0  # Within ~1 second before start
-            ]
+            # self.chunks maintains insertion order (chronological) in Python 3.7+
+            relevant_chunks = []
+            for t, data in self.chunks.items():
+                if t > end_time:
+                    break
+                if t >= start_time - 1.0: # Within ~1 second before start
+                    relevant_chunks.append((t, data))
 
             if not relevant_chunks:
                 raise ValueError(
@@ -130,7 +140,7 @@ class AudioBuffer:
                     f"No audio available for range {start_time:.2f}-{end_time:.2f}"
                 )
 
-            rms = np.sqrt(np.mean(trimmed**2))
+            rms = np.linalg.norm(trimmed) / np.sqrt(len(trimmed))
             logger.debug(f"Retrieved audio range [{start_time:.3f}, {end_time:.3f}]: {len(trimmed)} samples, rms={rms:.4f}")
 
             return trimmed.astype(np.float32)
@@ -196,7 +206,14 @@ class AudioBuffer:
             # Immediately clean up old data
             now = time.time()
             cutoff_time = now - window_size_sec
-            old_keys = [t for t in self.chunks if t < cutoff_time]
+
+            # self.chunks maintains insertion order (chronological) in Python 3.7+
+            old_keys = []
+            for t in self.chunks:
+                if t < cutoff_time:
+                    old_keys.append(t)
+                else:
+                    break
 
             for old_key in old_keys:
                 del self.chunks[old_key]
