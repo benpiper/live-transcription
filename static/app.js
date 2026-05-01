@@ -609,7 +609,7 @@ function showSystemAlert(level, message, detail = "") {
             <strong>${escapeHtml(message)}</strong>
             ${detail ? `<p style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">${escapeHtml(detail)}</p>` : ''}
         </div>
-        <button class="alert-close" onclick="this.parentElement.remove()" title="Dismiss">&times;</button>
+        <button class="alert-close" onclick="this.parentElement.remove()" title="Dismiss" aria-label="Dismiss alert"><span aria-hidden="true">&times;</span></button>
     `;
 
     // Add to container
@@ -689,8 +689,8 @@ function createTranscriptElement(data, fromSession = false) {
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
-                    ${hasAudio && item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
-                    ${hasAudio && item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                    ${hasAudio && item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio" aria-label="Play audio segment"><span aria-hidden="true">▶️</span></button>` : ''}
+                    ${hasAudio && item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip" aria-label="Download audio clip"><span aria-hidden="true">📥</span></button>` : ''}
                 </div>
             </div>
         </div>
@@ -809,8 +809,8 @@ function addTranscriptItem(data, fromSession = false) {
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
-                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
-                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio" aria-label="Play audio segment"><span aria-hidden="true">▶️</span></button>` : ''}
+                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip" aria-label="Download audio clip"><span aria-hidden="true">📥</span></button>` : ''}
                 </div>
             </div>
         </div>
@@ -1179,7 +1179,7 @@ async function playSegment(id) {
             const prevId = activePlaybackId;
             const prevBtn = document.querySelector(`[data-id="${prevId}"] .play-btn`);
             if (prevBtn) {
-                prevBtn.innerHTML = '▶️';
+                prevBtn.innerHTML = '<span aria-hidden="true">▶️</span>';
                 prevBtn.classList.remove('playing');
             }
             activePlaybackSource.stop();
@@ -1190,7 +1190,7 @@ async function playSegment(id) {
 
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
-        btn.innerHTML = '⏸️';
+        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
         btn.classList.add('playing');
     }
 
@@ -1265,7 +1265,7 @@ function playAudioBuffer(audioData, id, btn, context) {
             isPlaybackMuted = false;
 
             if (btn) {
-                btn.innerHTML = '▶️';
+                btn.innerHTML = '<span aria-hidden="true">▶️</span>';
                 btn.classList.remove('playing');
             }
         }
@@ -1324,7 +1324,7 @@ function renderWatchwords() {
         tag.className = 'tag';
         tag.innerHTML = `
             ${escapeHtml(word)}
-            <span class="remove" onclick="removeWatchword(${originalIndex})">×</span>
+            <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
         `;
         list.appendChild(tag);
     });
