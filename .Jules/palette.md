@@ -1,3 +1,3 @@
-## 2026-04-30 - [Explicit Label Association for Inputs]
-**Learning:** Found several inputs (sliders and text searches) missing explicit label association. Labels were visually present but lacked `for` attributes pointing to the input `id`s, which impacts screen reader accessibility. Additionally, icon-only buttons lacked `aria-label`s.
-**Action:** Always verify that `<label>` elements have a corresponding `for` attribute mapping to the target input's `id`. If a visible label cannot be used, ensure the input has an `aria-label`. Ensure icon-only buttons have `aria-label` attributes and their visual icons have `aria-hidden="true"`.
+## 2026-05-02 - Dynamic State ARIA Label Synchronization
+**Learning:** In dynamically updated interfaces (like audio playback controls), changing the visual state (e.g., swapping a '▶️' icon for a '⏸️' icon) does not automatically update the assistive state. If `aria-label` or `title` properties are initially set, they must be programmatically toggled alongside the visual changes.
+**Action:** When implementing elements that visually toggle between states, always write explicit logic to update the corresponding `aria-label` and `title` attributes simultaneously to maintain parity for screen reader users.

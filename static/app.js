@@ -609,7 +609,7 @@ function showSystemAlert(level, message, detail = "") {
             <strong>${escapeHtml(message)}</strong>
             ${detail ? `<p style="font-size: 0.8rem; margin-top: 4px; opacity: 0.8;">${escapeHtml(detail)}</p>` : ''}
         </div>
-        <button class="alert-close" onclick="this.parentElement.remove()" title="Dismiss">&times;</button>
+        <button class="alert-close" onclick="this.parentElement.remove()" title="Dismiss" aria-label="Dismiss alert">&times;</button>
     `;
 
     // Add to container
@@ -689,8 +689,8 @@ function createTranscriptElement(data, fromSession = false) {
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
-                    ${hasAudio && item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
-                    ${hasAudio && item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                    ${hasAudio && item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio" aria-label="Play audio">▶️</button>` : ''}
+                    ${hasAudio && item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip" aria-label="Download clip">📥</button>` : ''}
                 </div>
             </div>
         </div>
@@ -809,8 +809,8 @@ function addTranscriptItem(data, fromSession = false) {
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
                 <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
-                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio">▶️</button>` : ''}
-                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip">📥</button>` : ''}
+                    ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio" aria-label="Play audio">▶️</button>` : ''}
+                    ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip" aria-label="Download clip">📥</button>` : ''}
                 </div>
             </div>
         </div>
@@ -1180,6 +1180,8 @@ async function playSegment(id) {
             const prevBtn = document.querySelector(`[data-id="${prevId}"] .play-btn`);
             if (prevBtn) {
                 prevBtn.innerHTML = '▶️';
+                prevBtn.title = 'Play audio';
+                prevBtn.setAttribute('aria-label', 'Play audio');
                 prevBtn.classList.remove('playing');
             }
             activePlaybackSource.stop();
@@ -1191,6 +1193,8 @@ async function playSegment(id) {
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
         btn.innerHTML = '⏸️';
+        btn.title = 'Stop audio';
+        btn.setAttribute('aria-label', 'Stop audio');
         btn.classList.add('playing');
     }
 
@@ -1266,6 +1270,8 @@ function playAudioBuffer(audioData, id, btn, context) {
 
             if (btn) {
                 btn.innerHTML = '▶️';
+                btn.title = 'Play audio';
+                btn.setAttribute('aria-label', 'Play audio');
                 btn.classList.remove('playing');
             }
         }
@@ -1324,7 +1330,7 @@ function renderWatchwords() {
         tag.className = 'tag';
         tag.innerHTML = `
             ${escapeHtml(word)}
-            <span class="remove" onclick="removeWatchword(${originalIndex})">×</span>
+            <button class="remove" onclick="removeWatchword(${originalIndex})" title="Remove watchword" aria-label="Remove watchword">×</button>
         `;
         list.appendChild(tag);
     });
