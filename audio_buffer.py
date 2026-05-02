@@ -34,6 +34,7 @@ class AudioBuffer:
 
         # Storage: dict mapping timestamp -> np.ndarray(Float32)
         self.chunks = {}
+        self._total_bytes = 0
         self.lock = threading.Lock()
 
         logger.info(f"AudioBuffer initialized with window size {window_size_sec}s")
@@ -55,6 +56,7 @@ class AudioBuffer:
 
             # Add the chunk
             self.chunks[timestamp] = audio_data
+            self._total_bytes += audio_data.nbytes
             rms = np.linalg.norm(audio_data) / np.sqrt(len(audio_data)) if len(audio_data) > 0 else 0.0
             logger.debug(f"Added audio chunk at {timestamp:.3f}, size={len(audio_data)} samples ({audio_data.nbytes} bytes), rms={rms:.4f}")
 
@@ -70,6 +72,7 @@ class AudioBuffer:
                     break
 
             for old_key in old_keys:
+                self._total_bytes -= self.chunks[old_key].nbytes
                 del self.chunks[old_key]
                 logger.debug(f"Discarded audio chunk at {old_key:.2f}")
 
@@ -99,11 +102,14 @@ class AudioBuffer:
             # Include chunks that could overlap: chunk_start <= end_time
             # self.chunks maintains insertion order (chronological) in Python 3.7+
             relevant_chunks = []
-            for t, data in self.chunks.items():
-                if t > end_time:
+            for t in reversed(self.chunks):
+                if t < start_time - 1.0: # Break early if we've gone too far back
                     break
-                if t >= start_time - 1.0: # Within ~1 second before start
-                    relevant_chunks.append((t, data))
+                if t <= end_time:
+                    relevant_chunks.append((t, self.chunks[t]))
+
+            # Since we collected them backwards, reverse to get chronological order
+            relevant_chunks.reverse()
 
             if not relevant_chunks:
                 raise ValueError(
@@ -172,15 +178,12 @@ class AudioBuffer:
                 }
 
             # Calculate total size
-            total_bytes = sum(
-                data.nbytes for data in self.chunks.values()
-            )
+            total_bytes = self._total_bytes
             total_mb = total_bytes / (1024 * 1024)
 
             # Get time range
-            timestamps = sorted(self.chunks.keys())
-            oldest = timestamps[0]
-            newest = timestamps[-1]
+            oldest = next(iter(self.chunks))
+            newest = next(reversed(self.chunks))
             duration = newest - oldest
 
             return {
@@ -216,6 +219,7 @@ class AudioBuffer:
                     break
 
             for old_key in old_keys:
+                self._total_bytes -= self.chunks[old_key].nbytes
                 del self.chunks[old_key]
 
             logger.info(f"AudioBuffer window size changed to {window_size_sec}s, cleaned {len(old_keys)} old chunks")
@@ -225,6 +229,7 @@ class AudioBuffer:
         with self.lock:
             num_chunks = len(self.chunks)
             self.chunks.clear()
+            self._total_bytes = 0
             logger.info(f"AudioBuffer reset, cleared {num_chunks} chunks")
 
 
