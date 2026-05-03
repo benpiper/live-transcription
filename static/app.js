@@ -204,7 +204,7 @@ audioToggle.addEventListener('click', () => {
 
     isAudioEnabled = !isAudioEnabled;
     audioToggle.classList.toggle('active', isAudioEnabled);
-    audioToggle.innerHTML = isAudioEnabled ? '<span>🔊</span> Mute Audio' : '<span>🔇</span> Enable Audio';
+    audioToggle.innerHTML = isAudioEnabled ? '<span aria-hidden="true">🔊</span> Mute Audio' : '<span aria-hidden="true">🔇</span> Enable Audio';
 
     // Handle silent audio element for backgrounding
     if (silentAudio) {
@@ -1181,6 +1181,8 @@ async function playSegment(id) {
             if (prevBtn) {
                 prevBtn.innerHTML = '<span aria-hidden="true">▶️</span>';
                 prevBtn.classList.remove('playing');
+                prevBtn.setAttribute('title', 'Play audio');
+                prevBtn.setAttribute('aria-label', 'Play audio segment');
             }
             activePlaybackSource.stop();
         } catch (e) { }
@@ -1192,6 +1194,8 @@ async function playSegment(id) {
     if (btn) {
         btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
         btn.classList.add('playing');
+        btn.setAttribute('title', 'Pause audio');
+        btn.setAttribute('aria-label', 'Pause audio segment');
     }
 
     try {
@@ -1267,6 +1271,8 @@ function playAudioBuffer(audioData, id, btn, context) {
             if (btn) {
                 btn.innerHTML = '<span aria-hidden="true">▶️</span>';
                 btn.classList.remove('playing');
+                btn.setAttribute('title', 'Play audio');
+                btn.setAttribute('aria-label', 'Play audio segment');
             }
         }
     };
@@ -1500,7 +1506,7 @@ function toggleMatchFilter() {
 
     if (showOnlyMatches) {
         btn.classList.add('active');
-        btn.innerHTML = '<span id="filter-icon">👁</span> Matches';
+        btn.innerHTML = '<span id="filter-icon" aria-hidden="true">👁</span> Matches';
         // Hide non-matching items using cached references
         transcriptionHistory.forEach(item => {
             if (item.el && !item.el.classList.contains('highlight')) {
@@ -1509,7 +1515,7 @@ function toggleMatchFilter() {
         });
     } else {
         btn.classList.remove('active');
-        btn.innerHTML = '<span id="filter-icon">👁</span> All';
+        btn.innerHTML = '<span id="filter-icon" aria-hidden="true">👁</span> All';
         // Show all items using cached references
         transcriptionHistory.forEach(item => {
             if (item.el && item.el.classList.contains('match-filtered')) {
@@ -1630,14 +1636,14 @@ themeToggle.addEventListener('click', () => {
 sidebarToggle.addEventListener('click', () => {
     sidebar.classList.toggle('active');
     sidebarToggle.classList.toggle('active');
-    sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span>×</span>' : '<span>⚙️</span>';
+    sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
 });
 
 // Close sidebar on small screens when clicking outside (on the feed)
 document.querySelector('.feed-section').addEventListener('click', () => {
     if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
         sidebar.classList.remove('active');
-        sidebarToggle.innerHTML = '<span>⚙️</span>';
+        sidebarToggle.innerHTML = '<span aria-hidden="true">⚙️</span>';
     }
 });
 
