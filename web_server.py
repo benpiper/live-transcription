@@ -11,8 +11,10 @@ import queue
 import threading
 from contextlib import asynccontextmanager
 
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import io
 import numpy as np
@@ -249,6 +251,20 @@ def create_app(boot_callback=None, input_callback=None) -> FastAPI:
         description="Real-time audio transcription system with speaker diarization, multi-session support, and comparison features.",
         lifespan=lifespan,
         openapi_tags=tags_metadata
+    )
+
+    frontend_urls = os.environ.get("FRONTEND_URL", "").split(",")
+    allowed_origins = [url.strip() for url in frontend_urls if url.strip()]
+    if not allowed_origins:
+        # Default securely to local development if no origin is provided
+        allowed_origins = ["http://localhost:3000", "http://localhost:8000"]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     
     @app.get("/ping", response_model=HealthCheckResponse, tags=["health"])
