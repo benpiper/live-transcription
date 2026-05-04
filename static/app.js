@@ -1625,6 +1625,12 @@ function setTheme(newTheme) {
     theme = newTheme;
     document.documentElement.setAttribute('data-theme', theme);
     themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+
+    // Update accessibility attributes
+    const themeLabel = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    themeToggle.setAttribute('title', themeLabel);
+    themeToggle.setAttribute('aria-label', themeLabel);
+
     localStorage.setItem('theme', theme);
     updateVisualizerColors(); // Refresh colors for visualizer
 }
@@ -1634,9 +1640,15 @@ themeToggle.addEventListener('click', () => {
 });
 
 sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('active');
+    const isActive = sidebar.classList.toggle('active');
     sidebarToggle.classList.toggle('active');
-    sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+    sidebarToggle.innerHTML = isActive ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+
+    // Update accessibility attributes
+    sidebarToggle.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+    const label = isActive ? 'Close Settings' : 'Open Settings';
+    sidebarToggle.setAttribute('title', label);
+    sidebarToggle.setAttribute('aria-label', label);
 });
 
 // Close sidebar on small screens when clicking outside (on the feed)
@@ -1644,6 +1656,11 @@ document.querySelector('.feed-section').addEventListener('click', () => {
     if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
         sidebar.classList.remove('active');
         sidebarToggle.innerHTML = '<span aria-hidden="true">⚙️</span>';
+
+        // Update accessibility attributes
+        sidebarToggle.setAttribute('aria-expanded', 'false');
+        sidebarToggle.setAttribute('title', 'Open Settings');
+        sidebarToggle.setAttribute('aria-label', 'Open Settings');
     }
 });
 
@@ -1658,9 +1675,19 @@ function updateWatchwordCollapseUI() {
     if (isWatchwordsCollapsed) {
         watchwordContent.classList.add('collapsed');
         watchwordCollapseIcon.textContent = '+';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'false');
+            watchwordCollapseToggle.setAttribute('title', 'Expand Watchwords');
+            watchwordCollapseToggle.setAttribute('aria-label', 'Expand Watchwords');
+        }
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'true');
+            watchwordCollapseToggle.setAttribute('title', 'Collapse Watchwords');
+            watchwordCollapseToggle.setAttribute('aria-label', 'Collapse Watchwords');
+        }
     }
 }
 
@@ -1859,6 +1886,12 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+
+        // Update accessibility attributes
+        collapseBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        const label = isCollapsed ? 'Expand Audio Processing' : 'Collapse Audio Processing';
+        collapseBtn.setAttribute('title', label);
+        collapseBtn.setAttribute('aria-label', label);
     });
 
     // Reset to defaults
