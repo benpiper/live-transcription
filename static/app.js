@@ -987,15 +987,28 @@ document.getElementById('speaker-dropdown-toggle').addEventListener('click', () 
     const menu = document.getElementById('speaker-dropdown-menu');
     const toggle = document.getElementById('speaker-dropdown-toggle');
     menu.classList.toggle('hidden');
-    toggle.classList.toggle('open');
+    const isOpen = toggle.classList.toggle('open');
+
+    toggle.setAttribute('aria-expanded', isOpen.toString());
+    if (isOpen) {
+        toggle.setAttribute('title', 'Collapse Speaker Filter');
+        toggle.setAttribute('aria-label', 'Collapse Speaker Filter');
+    } else {
+        toggle.setAttribute('title', 'Expand Speaker Filter');
+        toggle.setAttribute('aria-label', 'Expand Speaker Filter');
+    }
 });
 
 // Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
     const dropdown = document.querySelector('.speaker-dropdown');
     if (!dropdown.contains(e.target)) {
+        const toggle = document.getElementById('speaker-dropdown-toggle');
         document.getElementById('speaker-dropdown-menu').classList.add('hidden');
-        document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('title', 'Expand Speaker Filter');
+        toggle.setAttribute('aria-label', 'Expand Speaker Filter');
     }
 });
 
@@ -1658,9 +1671,19 @@ function updateWatchwordCollapseUI() {
     if (isWatchwordsCollapsed) {
         watchwordContent.classList.add('collapsed');
         watchwordCollapseIcon.textContent = '+';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'false');
+            watchwordCollapseToggle.setAttribute('title', 'Expand Watchwords');
+            watchwordCollapseToggle.setAttribute('aria-label', 'Expand Watchwords');
+        }
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'true');
+            watchwordCollapseToggle.setAttribute('title', 'Collapse Watchwords');
+            watchwordCollapseToggle.setAttribute('aria-label', 'Collapse Watchwords');
+        }
     }
 }
 
@@ -1816,6 +1839,17 @@ if (scrollLockBtn) {
         }
         updateDisplayValues();
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+
+        // Sync ARIA state on load
+        const isCollapsed = contentDiv.classList.contains('collapsed');
+        collapseBtn.setAttribute('aria-expanded', (!isCollapsed).toString());
+        if (isCollapsed) {
+            collapseBtn.setAttribute('title', 'Expand Audio Processing');
+            collapseBtn.setAttribute('aria-label', 'Expand Audio Processing');
+        } else {
+            collapseBtn.setAttribute('title', 'Collapse Audio Processing');
+            collapseBtn.setAttribute('aria-label', 'Collapse Audio Processing');
+        }
     }
 
     function updateDisplayValues() {
@@ -1859,6 +1893,15 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+
+        collapseBtn.setAttribute('aria-expanded', (!isCollapsed).toString());
+        if (isCollapsed) {
+            collapseBtn.setAttribute('title', 'Expand Audio Processing');
+            collapseBtn.setAttribute('aria-label', 'Expand Audio Processing');
+        } else {
+            collapseBtn.setAttribute('title', 'Collapse Audio Processing');
+            collapseBtn.setAttribute('aria-label', 'Collapse Audio Processing');
+        }
     });
 
     // Reset to defaults
