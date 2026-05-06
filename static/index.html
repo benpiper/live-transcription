@@ -21,11 +21,11 @@
                 <button id="theme-toggle" class="btn-icon" title="Toggle Light/Dark Mode" aria-label="Toggle Light/Dark Mode">
                     <span id="theme-icon" aria-hidden="true">🌙</span>
                 </button>
-                <button id="sidebar-toggle" class="btn-icon" title="Toggle Settings" aria-label="Toggle Settings" style="display: none;">
+                <button id="sidebar-toggle" class="btn-icon" title="Toggle Settings" aria-label="Toggle Settings" style="display: none;" aria-expanded="false">
                     <span aria-hidden="true">⚙️</span>
                 </button>
-                <button id="audio-toggle" class="btn-primary">
-                    <span class="icon">🔇</span> Enable Audio
+                <button id="audio-toggle" class="btn-primary" aria-pressed="false">
+                    <span class="icon" aria-hidden="true">🔇</span> Enable Audio
                 </button>
             </div>
         </header>
@@ -36,7 +36,7 @@
                     <h2>Transcription Feed</h2>
                     <div class="section-header-right">
                         <button id="scroll-lock" class="btn-icon scroll-status"
-                            title="Auto-scrolling - Scroll up to pause">
+                            title="Auto-scrolling - Scroll up to pause" aria-label="Pause auto-scrolling" aria-pressed="false">
                             <span id="scroll-lock-icon">▼ LIVE</span>
                         </button>
                         <span id="speaker-count" class="text-muted">0 Speakers Detected</span>
@@ -88,7 +88,7 @@
                         <h3>Audio Processing</h3>
                         <div class="header-actions">
                             <button id="audio-processing-reset" class="btn-text">Reset</button>
-                            <button id="audio-processing-collapse" class="btn-icon-small" title="Collapse/Expand" aria-label="Collapse/Expand Audio Processing">
+                            <button id="audio-processing-collapse" class="btn-icon-small" title="Collapse/Expand" aria-label="Expand Audio Processing" aria-expanded="false">
                                 <span id="audio-processing-collapse-icon" aria-hidden="true">+</span>
                             </button>
                         </div>
@@ -150,7 +150,7 @@
                         <h3>Watchwords</h3>
                         <div class="header-actions">
                             <button id="clear-watchwords" class="btn-text">Clear All</button>
-                            <button id="watchword-collapse-toggle" class="btn-icon-small" title="Collapse/Expand" aria-label="Collapse/Expand Watchwords">
+                            <button id="watchword-collapse-toggle" class="btn-icon-small" title="Collapse/Expand" aria-label="Collapse Watchwords" aria-expanded="true">
                                 <span id="watchword-collapse-icon" aria-hidden="true">−</span>
                             </button>
                         </div>

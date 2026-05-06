@@ -205,6 +205,7 @@ audioToggle.addEventListener('click', () => {
     isAudioEnabled = !isAudioEnabled;
     audioToggle.classList.toggle('active', isAudioEnabled);
     audioToggle.innerHTML = isAudioEnabled ? '<span aria-hidden="true">🔊</span> Mute Audio' : '<span aria-hidden="true">🔇</span> Enable Audio';
+    audioToggle.setAttribute('aria-pressed', isAudioEnabled);
 
     // Handle silent audio element for backgrounding
     if (silentAudio) {
@@ -987,7 +988,8 @@ document.getElementById('speaker-dropdown-toggle').addEventListener('click', () 
     const menu = document.getElementById('speaker-dropdown-menu');
     const toggle = document.getElementById('speaker-dropdown-toggle');
     menu.classList.toggle('hidden');
-    toggle.classList.toggle('open');
+    const isOpen = toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', isOpen);
 });
 
 // Close dropdown when clicking outside
@@ -995,7 +997,9 @@ document.addEventListener('click', (e) => {
     const dropdown = document.querySelector('.speaker-dropdown');
     if (!dropdown.contains(e.target)) {
         document.getElementById('speaker-dropdown-menu').classList.add('hidden');
-        document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+        const toggle = document.getElementById('speaker-dropdown-toggle');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
     }
 });
 
@@ -1627,6 +1631,9 @@ function setTheme(newTheme) {
     themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
     localStorage.setItem('theme', theme);
     updateVisualizerColors(); // Refresh colors for visualizer
+    const label = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    themeToggle.setAttribute('title', label);
+    themeToggle.setAttribute('aria-label', label);
 }
 
 themeToggle.addEventListener('click', () => {
@@ -1636,7 +1643,10 @@ themeToggle.addEventListener('click', () => {
 sidebarToggle.addEventListener('click', () => {
     sidebar.classList.toggle('active');
     sidebarToggle.classList.toggle('active');
-    sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+    const isActive = sidebar.classList.contains('active');
+    sidebarToggle.innerHTML = isActive ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+    sidebarToggle.setAttribute('aria-expanded', isActive);
+    sidebarToggle.setAttribute('aria-label', isActive ? 'Close Settings' : 'Toggle Settings');
 });
 
 // Close sidebar on small screens when clicking outside (on the feed)
@@ -1644,6 +1654,8 @@ document.querySelector('.feed-section').addEventListener('click', () => {
     if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
         sidebar.classList.remove('active');
         sidebarToggle.innerHTML = '<span aria-hidden="true">⚙️</span>';
+        sidebarToggle.setAttribute('aria-expanded', 'false');
+        sidebarToggle.setAttribute('aria-label', 'Toggle Settings');
     }
 });
 
@@ -1661,6 +1673,10 @@ function updateWatchwordCollapseUI() {
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+    }
+    if (watchwordCollapseToggle) {
+        watchwordCollapseToggle.setAttribute('aria-expanded', !isWatchwordsCollapsed);
+        watchwordCollapseToggle.setAttribute('aria-label', isWatchwordsCollapsed ? 'Expand Watchwords' : 'Collapse Watchwords');
     }
 }
 
@@ -1738,6 +1754,8 @@ function updateScrollLockUI() {
         scrollLockBtn.title = isScrollLocked
             ? 'Scroll paused - Click to resume auto-scroll'
             : 'Auto-scrolling - Scroll up to pause';
+        scrollLockBtn.setAttribute('aria-pressed', isScrollLocked);
+        scrollLockBtn.setAttribute('aria-label', isScrollLocked ? 'Resume auto-scrolling' : 'Pause auto-scrolling');
     }
 }
 
@@ -1859,6 +1877,8 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+        collapseBtn.setAttribute('aria-expanded', !isCollapsed);
+        collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand Audio Processing' : 'Collapse Audio Processing');
     });
 
     // Reset to defaults
