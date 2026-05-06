@@ -534,6 +534,11 @@ function handleAudioData(data) {
     }
 }
 
+function escapeRegExp(string) {
+    if (typeof string !== "string") return string;
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function escapeHtml(unsafe) {
     if (typeof unsafe !== 'string') return unsafe;
     return unsafe
@@ -566,7 +571,8 @@ function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
     if (watchwords.length === 0) return result;
     for (const word of watchwords) {
-        const regex = new RegExp(`(${word})`, 'gi');
+        const escapedWord = escapeRegExp(escapeHtml(word));
+        const regex = new RegExp(`(${escapedWord})`, 'gi');
         result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
     }
     return result;
