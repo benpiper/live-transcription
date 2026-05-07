@@ -986,8 +986,9 @@ function filterBySpeaker(speaker) {
 document.getElementById('speaker-dropdown-toggle').addEventListener('click', () => {
     const menu = document.getElementById('speaker-dropdown-menu');
     const toggle = document.getElementById('speaker-dropdown-toggle');
-    menu.classList.toggle('hidden');
+    const isHidden = menu.classList.toggle('hidden');
     toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', !isHidden);
 });
 
 // Close dropdown when clicking outside
@@ -995,7 +996,9 @@ document.addEventListener('click', (e) => {
     const dropdown = document.querySelector('.speaker-dropdown');
     if (!dropdown.contains(e.target)) {
         document.getElementById('speaker-dropdown-menu').classList.add('hidden');
-        document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+        const toggle = document.getElementById('speaker-dropdown-toggle');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
     }
 });
 
@@ -1658,9 +1661,19 @@ function updateWatchwordCollapseUI() {
     if (isWatchwordsCollapsed) {
         watchwordContent.classList.add('collapsed');
         watchwordCollapseIcon.textContent = '+';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'false');
+            watchwordCollapseToggle.title = 'Expand Watchwords';
+            watchwordCollapseToggle.setAttribute('aria-label', 'Expand Watchwords');
+        }
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'true');
+            watchwordCollapseToggle.title = 'Collapse Watchwords';
+            watchwordCollapseToggle.setAttribute('aria-label', 'Collapse Watchwords');
+        }
     }
 }
 
@@ -1859,6 +1872,10 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+        collapseBtn.setAttribute('aria-expanded', !isCollapsed);
+        const actionText = isCollapsed ? 'Expand' : 'Collapse';
+        collapseBtn.title = `${actionText} Audio Processing`;
+        collapseBtn.setAttribute('aria-label', `${actionText} Audio Processing`);
     });
 
     // Reset to defaults
