@@ -986,16 +986,19 @@ function filterBySpeaker(speaker) {
 document.getElementById('speaker-dropdown-toggle').addEventListener('click', () => {
     const menu = document.getElementById('speaker-dropdown-menu');
     const toggle = document.getElementById('speaker-dropdown-toggle');
-    menu.classList.toggle('hidden');
+    const isHidden = menu.classList.toggle('hidden');
     toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', !isHidden);
 });
 
 // Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
     const dropdown = document.querySelector('.speaker-dropdown');
     if (!dropdown.contains(e.target)) {
+        const toggle = document.getElementById('speaker-dropdown-toggle');
         document.getElementById('speaker-dropdown-menu').classList.add('hidden');
-        document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
     }
 });
 
@@ -1658,9 +1661,15 @@ function updateWatchwordCollapseUI() {
     if (isWatchwordsCollapsed) {
         watchwordContent.classList.add('collapsed');
         watchwordCollapseIcon.textContent = '+';
+        watchwordCollapseToggle.setAttribute('aria-expanded', 'false');
+        watchwordCollapseToggle.setAttribute('aria-label', 'Expand Watchwords');
+        watchwordCollapseToggle.title = 'Expand Watchwords';
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+        watchwordCollapseToggle.setAttribute('aria-expanded', 'true');
+        watchwordCollapseToggle.setAttribute('aria-label', 'Collapse Watchwords');
+        watchwordCollapseToggle.title = 'Collapse Watchwords';
     }
 }
 
@@ -1859,6 +1868,10 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+        collapseBtn.setAttribute('aria-expanded', !isCollapsed);
+        const actionText = isCollapsed ? 'Expand Audio Processing' : 'Collapse Audio Processing';
+        collapseBtn.setAttribute('aria-label', actionText);
+        collapseBtn.title = actionText;
     });
 
     // Reset to defaults
