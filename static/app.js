@@ -556,6 +556,10 @@ function escapeJs(unsafe) {
         .replace(/>/g, "\\x3e");
 }
 
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function checkWatchwords(text) {
     if (watchwords.length === 0) return false;
     const lowerText = text.toLowerCase();
@@ -566,7 +570,9 @@ function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
     if (watchwords.length === 0) return result;
     for (const word of watchwords) {
-        const regex = new RegExp(`(${word})`, 'gi');
+        // Sanitize the watchword to prevent regex injection (ReDoS)
+        const safeWord = escapeRegExp(word);
+        const regex = new RegExp(`(${safeWord})`, 'gi');
         result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
     }
     return result;
