@@ -7,3 +7,6 @@
 ## 2026-05-03 - [Ensuring accessibility updates in innerHTML overrides]
 **Learning:** For elements that have visual states continuously updated through `innerHTML`, the inner wrappers need to maintain `aria-hidden="true"` so that the screen reader won't read decorative emojis. Furthermore, for playback buttons changing their text, they should change their title and aria-labels via `setAttribute` to sync up the accessibility tools and the tooltips with the current playing status.
 **Action:** When updating elements using `innerHTML` and `setAttribute` in vanilla JS, continuously apply both sets of changes to keep the visual presentation (emojis and tooltips) aligned with the screen-reader state (via `aria-hidden` and `aria-label`).
+## 2026-05-10 - Dynamic aria-expanded attributes for collapsibles
+**Learning:** When using vanilla JS to visually toggle UI elements (like sidebars, dropdowns, or content sections) via classes such as `.hidden`, `.collapsed`, or `.active`, we must explicitly map these visual state changes to programmatic `aria-expanded` updates on the control buttons for screen reader parity.
+**Action:** Ensure any UI component with an expand/collapse toggle explicitly updates `aria-expanded` on the toggle button inside its click event listener alongside the classlist toggle.
