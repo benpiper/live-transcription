@@ -988,6 +988,7 @@ document.getElementById('speaker-dropdown-toggle').addEventListener('click', () 
     const toggle = document.getElementById('speaker-dropdown-toggle');
     menu.classList.toggle('hidden');
     toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', !menu.classList.contains('hidden'));
 });
 
 // Close dropdown when clicking outside
@@ -996,6 +997,7 @@ document.addEventListener('click', (e) => {
     if (!dropdown.contains(e.target)) {
         document.getElementById('speaker-dropdown-menu').classList.add('hidden');
         document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+        document.getElementById('speaker-dropdown-toggle').setAttribute('aria-expanded', 'false');
     }
 });
 
@@ -1637,6 +1639,7 @@ sidebarToggle.addEventListener('click', () => {
     sidebar.classList.toggle('active');
     sidebarToggle.classList.toggle('active');
     sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+    sidebarToggle.setAttribute('aria-expanded', sidebar.classList.contains('active'));
 });
 
 // Close sidebar on small screens when clicking outside (on the feed)
@@ -1644,6 +1647,7 @@ document.querySelector('.feed-section').addEventListener('click', () => {
     if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
         sidebar.classList.remove('active');
         sidebarToggle.innerHTML = '<span aria-hidden="true">⚙️</span>';
+        sidebarToggle.setAttribute('aria-expanded', 'false');
     }
 });
 
@@ -1661,6 +1665,9 @@ function updateWatchwordCollapseUI() {
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+    }
+    if (watchwordCollapseToggle) {
+        watchwordCollapseToggle.setAttribute('aria-expanded', !isWatchwordsCollapsed);
     }
 }
 
@@ -1859,6 +1866,7 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+        collapseBtn.setAttribute('aria-expanded', !isCollapsed);
     });
 
     // Reset to defaults
