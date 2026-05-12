@@ -92,17 +92,13 @@ class SpeakerManager:
             
             # Compare with known speakers
             from torch.nn.functional import cosine_similarity
-            max_sim = -1
-            best_label = None
             
-            for spk_emb, label in self.speakers:
-                sim = cosine_similarity(
-                    embedding.unsqueeze(0), 
-                    spk_emb.unsqueeze(0)
-                ).item()
-                if sim > max_sim:
-                    max_sim = sim
-                    best_label = label
+            speaker_embeddings = torch.stack([spk_emb for spk_emb, _ in self.speakers])
+            similarities = cosine_similarity(embedding.unsqueeze(0), speaker_embeddings)
+            max_sim_tensor, max_idx = torch.max(similarities, dim=0)
+
+            max_sim = max_sim_tensor.item()
+            best_label = self.speakers[max_idx.item()][1]
             
             if max_sim > current_threshold:
                 return best_label
