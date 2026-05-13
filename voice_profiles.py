@@ -98,15 +98,17 @@ class VoiceProfileManager:
         best_match = None
         best_similarity = -1
         
-        for name, profile_emb in self.profiles.items():
-            similarity = cosine_similarity(
-                embedding.unsqueeze(0),
-                profile_emb.unsqueeze(0)
-            ).item()
+        if self.profiles:
+            # Batched similarity computation
+            profile_names = list(self.profiles.keys())
+            profile_embs = list(self.profiles.values())
             
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_match = name
+            stacked_embs = torch.stack(profile_embs)
+            similarities = cosine_similarity(embedding.unsqueeze(0), stacked_embs)
+
+            max_idx = torch.argmax(similarities).item()
+            best_similarity = similarities[max_idx].item()
+            best_match = profile_names[max_idx]
         
         if best_similarity >= threshold:
             logger.debug(f"Profile match: {best_match} (similarity: {best_similarity:.3f})")
