@@ -7,3 +7,8 @@
 **Vulnerability:** The application was missing an explicit Cross-Origin Resource Sharing (CORS) configuration in the FastAPI backend (`web_server.py`), meaning cross-origin frontend requests (such as from Render to an on-premise deployment) would fail. Adding CORS configuration securely is required, as allowing all origins (`["*"]`) leads to an overly permissive CORS configuration.
 **Learning:** For a split deployment architecture, CORS must be explicitly configured to only permit trusted frontend domains.
 **Prevention:** Use an environment variable like `FRONTEND_URL` to define and inject the allowed origins dynamically without resorting to wildcard (`*`) matching, and provide safe fallback origins (like localhost) for local development environments.
+
+## 2025-02-28 - [High] Prevent ReDoS via user-controlled regex
+**Vulnerability:** User-controlled strings (watchwords) were directly interpolated into a `new RegExp()` constructor in `static/app.js` without proper sanitization. This allowed users to inject special characters or malformed regex patterns, opening up a potential Regular Expression Denial of Service (ReDoS) vulnerability.
+**Learning:** In vanilla JavaScript, dynamically creating regular expressions from user input (like search keywords or watchwords) is dangerous. Since there's no built-in regex sanitization standard library in JavaScript, custom implementation of string sanitization is critical before creating instances of `RegExp`.
+**Prevention:** Always sanitize user-controlled strings using a function like `escapeRegExp` (e.g. `string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`) before passing them to the `new RegExp()` constructor.
