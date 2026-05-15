@@ -1318,7 +1318,16 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        if (clearBtn) clearBtn.disabled = true;
+        list.innerHTML = '<span class="text-muted" style="font-size: 0.85rem; padding: 4px; font-style: italic;">No watchwords added</span>';
+        return;
+    }
+
+    if (clearBtn) clearBtn.disabled = false;
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1338,6 +1347,7 @@ function renderWatchwords() {
 
 function addWatchword() {
     const input = document.getElementById('watchword-input');
+    const addBtn = document.getElementById('add-watchword');
     const word = input.value.trim();
     if (word && !watchwords.includes(word)) {
         watchwords.push(word);
@@ -1345,6 +1355,7 @@ function addWatchword() {
         renderWatchwords();
         reApplyWatchwordHighlights();
         input.value = '';
+        addBtn.disabled = true;
         
         // Auto-navigate to first match
         setTimeout(() => {
@@ -1529,8 +1540,16 @@ function toggleMatchFilter() {
 
 // Event Listeners for Watchwords
 document.getElementById('add-watchword').addEventListener('click', addWatchword);
-document.getElementById('watchword-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') addWatchword();
+const watchwordInput = document.getElementById('watchword-input');
+const addWatchwordBtn = document.getElementById('add-watchword');
+
+addWatchwordBtn.disabled = watchwordInput.value.trim().length === 0;
+watchwordInput.addEventListener('input', (e) => {
+    addWatchwordBtn.disabled = e.target.value.trim().length === 0;
+});
+
+watchwordInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !addWatchwordBtn.disabled) addWatchword();
 });
 document.getElementById('clear-watchwords').addEventListener('click', clearWatchwords);
 
@@ -1658,9 +1677,11 @@ function updateWatchwordCollapseUI() {
     if (isWatchwordsCollapsed) {
         watchwordContent.classList.add('collapsed');
         watchwordCollapseIcon.textContent = '+';
+        watchwordCollapseToggle.setAttribute('aria-expanded', 'false');
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+        watchwordCollapseToggle.setAttribute('aria-expanded', 'true');
     }
 }
 
@@ -1859,6 +1880,7 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+        collapseBtn.setAttribute('aria-expanded', !isCollapsed);
     });
 
     // Reset to defaults
