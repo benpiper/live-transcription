@@ -95,18 +95,18 @@ class VoiceProfileManager:
             "voice_match_threshold", self.threshold
         )
         
-        best_match = None
-        best_similarity = -1
-        
-        for name, profile_emb in self.profiles.items():
-            similarity = cosine_similarity(
-                embedding.unsqueeze(0),
-                profile_emb.unsqueeze(0)
-            ).item()
+        # Batch embeddings to avoid Python loop overhead
+        names = list(self.profiles.keys())
+        if not names:
+            return None
             
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_match = name
+        profile_embs = torch.stack([self.profiles[name] for name in names])
+
+        sims = cosine_similarity(embedding.unsqueeze(0), profile_embs)
+        max_sim, max_idx = torch.max(sims, dim=0)
+
+        best_similarity = max_sim.item()
+        best_match = names[max_idx.item()]
         
         if best_similarity >= threshold:
             logger.debug(f"Profile match: {best_match} (similarity: {best_similarity:.3f})")
