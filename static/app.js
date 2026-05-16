@@ -986,8 +986,9 @@ function filterBySpeaker(speaker) {
 document.getElementById('speaker-dropdown-toggle').addEventListener('click', () => {
     const menu = document.getElementById('speaker-dropdown-menu');
     const toggle = document.getElementById('speaker-dropdown-toggle');
-    menu.classList.toggle('hidden');
+    const isHidden = menu.classList.toggle('hidden');
     toggle.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', !isHidden);
 });
 
 // Close dropdown when clicking outside
@@ -995,7 +996,9 @@ document.addEventListener('click', (e) => {
     const dropdown = document.querySelector('.speaker-dropdown');
     if (!dropdown.contains(e.target)) {
         document.getElementById('speaker-dropdown-menu').classList.add('hidden');
-        document.getElementById('speaker-dropdown-toggle').classList.remove('open');
+        const toggle = document.getElementById('speaker-dropdown-toggle');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
     }
 });
 
@@ -1634,9 +1637,12 @@ themeToggle.addEventListener('click', () => {
 });
 
 sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('active');
+    const isActive = sidebar.classList.toggle('active');
     sidebarToggle.classList.toggle('active');
-    sidebarToggle.innerHTML = sidebar.classList.contains('active') ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+    sidebarToggle.innerHTML = isActive ? '<span aria-hidden="true">×</span>' : '<span aria-hidden="true">⚙️</span>';
+    sidebarToggle.setAttribute('aria-expanded', isActive);
+    sidebarToggle.setAttribute('aria-label', isActive ? 'Close Settings' : 'Toggle Settings');
+    sidebarToggle.setAttribute('title', isActive ? 'Close Settings' : 'Toggle Settings');
 });
 
 // Close sidebar on small screens when clicking outside (on the feed)
@@ -1644,6 +1650,9 @@ document.querySelector('.feed-section').addEventListener('click', () => {
     if (window.innerWidth <= 1024 && sidebar.classList.contains('active')) {
         sidebar.classList.remove('active');
         sidebarToggle.innerHTML = '<span aria-hidden="true">⚙️</span>';
+        sidebarToggle.setAttribute('aria-expanded', 'false');
+        sidebarToggle.setAttribute('aria-label', 'Toggle Settings');
+        sidebarToggle.setAttribute('title', 'Toggle Settings');
     }
 });
 
@@ -1658,9 +1667,19 @@ function updateWatchwordCollapseUI() {
     if (isWatchwordsCollapsed) {
         watchwordContent.classList.add('collapsed');
         watchwordCollapseIcon.textContent = '+';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'false');
+            watchwordCollapseToggle.setAttribute('aria-label', 'Expand Watchwords');
+            watchwordCollapseToggle.setAttribute('title', 'Expand Watchwords');
+        }
     } else {
         watchwordContent.classList.remove('collapsed');
         watchwordCollapseIcon.textContent = '−';
+        if (watchwordCollapseToggle) {
+            watchwordCollapseToggle.setAttribute('aria-expanded', 'true');
+            watchwordCollapseToggle.setAttribute('aria-label', 'Collapse Watchwords');
+            watchwordCollapseToggle.setAttribute('title', 'Collapse Watchwords');
+        }
     }
 }
 
@@ -1859,6 +1878,9 @@ if (scrollLockBtn) {
     collapseBtn.addEventListener('click', () => {
         const isCollapsed = contentDiv.classList.toggle('collapsed');
         collapseIcon.textContent = isCollapsed ? '+' : '−';
+        collapseBtn.setAttribute('aria-expanded', !isCollapsed);
+        collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand Audio Processing' : 'Collapse Audio Processing');
+        collapseBtn.setAttribute('title', isCollapsed ? 'Expand Audio Processing' : 'Collapse Audio Processing');
     });
 
     // Reset to defaults
