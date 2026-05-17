@@ -4,3 +4,6 @@
 ## 2024-05-16 - Batched PyTorch Operations for Speaker Identification
 **Learning:** PyTorch cosine_similarity operations in a Python loop for speaker tracking incur significant C++ transition overhead as the number of speakers grows.
 **Action:** Always replace Python loops with batched tensor operations (like `torch.stack()` and `torch.argmax()`) when performing distance metrics across a collection of tensors to maintain O(1) loop-level performance overhead.
+## 2025-03-05 - Compiled Regex Pattern Caching for Transcription Loops
+**Learning:** Instantiating new regex strings or dynamically generating `re.compile()` calls during hot paths (such as audio segment evaluation within `transcribe_chunk`) causes measurable iteration latency. Specifically, testing string matches for multiple hallucination or correction patterns rapidly compounds.
+**Action:** Move static regex definitions to globally-initialized lists composed strictly of pre-compiled `re.compile()` objects. For settings dynamically fetched inside a loop (like `get_corrections()`), implement a reference-checking cache outside the loop so compilation occurs only when underlying configuration structurally changes.
