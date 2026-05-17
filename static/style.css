@@ -564,10 +564,16 @@ main {
     color: var(--text-muted);
 }
 
-.play-btn:hover,
-.download-btn:hover {
+.play-btn:hover:not(:disabled),
+.download-btn:hover:not(:disabled) {
     background: var(--glass);
     color: var(--primary);
+}
+
+.play-btn:disabled,
+.download-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .play-btn:focus-visible,

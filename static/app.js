@@ -1063,6 +1063,13 @@ async function downloadSegment(id) {
         return;
     }
 
+    const btn = document.querySelector(`[data-id="${id}"] .download-btn`);
+    if (btn) {
+        btn.innerHTML = '<span aria-hidden="true">⏳</span>';
+        btn.setAttribute('aria-label', 'Downloading audio clip');
+        btn.disabled = true;
+    }
+
     console.log("Download item found:", { id: item.id, duration: item.duration, origin_time: item.origin_time, text: item.text.substring(0, 50) });
 
     // Extract timestamp from segment ID
@@ -1070,6 +1077,11 @@ async function downloadSegment(id) {
     const originTime = parseFloat(id.replace("audio-", ""));
     if (isNaN(originTime)) {
         console.error("Invalid segment ID format:", id);
+        if (btn) {
+            btn.innerHTML = '<span aria-hidden="true">📥</span>';
+            btn.setAttribute('aria-label', 'Download audio clip');
+            btn.disabled = false;
+        }
         return;
     }
 
@@ -1105,6 +1117,12 @@ async function downloadSegment(id) {
     } catch (error) {
         console.error("Error downloading audio:", error);
         alert("Failed to download audio segment");
+    } finally {
+        if (btn) {
+            btn.innerHTML = '<span aria-hidden="true">📥</span>';
+            btn.setAttribute('aria-label', 'Download audio clip');
+            btn.disabled = false;
+        }
     }
 }
 
