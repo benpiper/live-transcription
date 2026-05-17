@@ -1,3 +1,6 @@
 ## 2025-03-05 - Audio Buffer and RMS Optimizations
 **Learning:** In audio processing loops, allocating intermediate arrays like `audio_data**2` for RMS calculations creates significant memory overhead and slowness. Also, relying on `sorted(dict.items())` or full list comprehensions on chronological data structures like `AudioBuffer` scales poorly as the buffer grows to handle 24-hour retention.
 **Action:** Use `np.linalg.norm(audio_data) / np.sqrt(len(audio_data))` to leverage in-place fast C/BLAS routines without intermediate allocations. For dictionaries holding chronologically inserted data (in Python 3.7+), utilize their guaranteed insertion order with early `break` loops to turn O(N log N) and O(N) operations into amortized O(1).
+## 2024-05-16 - Batched PyTorch Operations for Speaker Identification
+**Learning:** PyTorch cosine_similarity operations in a Python loop for speaker tracking incur significant C++ transition overhead as the number of speakers grows.
+**Action:** Always replace Python loops with batched tensor operations (like `torch.stack()` and `torch.argmax()`) when performing distance metrics across a collection of tensors to maintain O(1) loop-level performance overhead.
