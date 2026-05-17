@@ -25,6 +25,36 @@ model = None
 # Audio parameters
 SAMPLE_RATE = 16000
 
+# Compiled patterns caching for performance
+_COMPILED_HALLUCINATION_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"^(Thank you|Thanks)[\.\!\s]*$",
+        r"^(Bye|Goodbye)[\.\!\s]*$",
+        r"^(Hmm+|Uh+|Um+)[\.\!\s]*$",
+        r"^[\.\!\?\s\-]+$",
+        r"^\s*$",
+        # Subtitle/caption credits
+        r"(?i)subtitles?\s*(by|from|created)",
+        r"(?i)amara\.org",
+        r"(?i)transcribed\s*by",
+        r"(?i)captioned\s*by",
+        r"(?i)translated\s*by",
+        # Music/sound notation
+        r"^\[.*\]$",
+        r"^♪.*♪$",
+        r"^\(.*\)$",
+        # Sponsor/promo spam
+        r"(?i)subscribe\s*(to|and|now)",
+        r"(?i)like\s*(and|this)\s*video",
+        r"(?i)don'?t\s*forget\s*to",
+    ]
+]
+
+# Cache for compiled correction patterns
+_last_corrections_ref = None
+_compiled_corrections = []
+
+
 # Device state tracking
 _active_device = None        # 'cuda' or 'cpu' - what we're currently running on
 _intended_device = None      # What the user/config wanted
@@ -465,33 +495,21 @@ def transcribe_chunk(
     no_speech_prob_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
     extreme_conf_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
     
-    hallucination_patterns = [
-        r"^(Thank you|Thanks)[\.\!\s]*$",
-        r"^(Bye|Goodbye)[\.\!\s]*$",
-        r"^(Hmm+|Uh+|Um+)[\.\!\s]*$",
-        r"^[\.\!\?\s\-]+$",
-        r"^\s*$",
-        # Subtitle/caption credits
-        r"(?i)subtitles?\s*(by|from|created)",
-        r"(?i)amara\.org",
-        r"(?i)transcribed\s*by",
-        r"(?i)captioned\s*by",
-        r"(?i)translated\s*by",
-        # Music/sound notation
-        r"^\[.*\]$",
-        r"^♪.*♪$",
-        r"^\(.*\)$",
-        # Sponsor/promo spam
-        r"(?i)subscribe\s*(to|and|now)",
-        r"(?i)like\s*(and|this)\s*video",
-        r"(?i)don'?t\s*forget\s*to",
-    ]
+    # Update corrections cache if needed
+    global _last_corrections_ref, _compiled_corrections
+    corrections = get_corrections()
+    if corrections != _last_corrections_ref:
+        _compiled_corrections = [
+            (re.compile(re.escape(wrong), re.IGNORECASE), right)
+            for wrong, right in corrections.items()
+        ]
+        _last_corrections_ref = corrections
     
     for segment in segments:
         text_segment = segment.text.strip()
         
         # Filter hallucinations
-        if any(re.match(p, text_segment, re.IGNORECASE) for p in hallucination_patterns):
+        if any(p.match(text_segment) for p in _COMPILED_HALLUCINATION_PATTERNS):
             continue
         
         # Confidence filtering
@@ -534,9 +552,7 @@ def transcribe_chunk(
         
         # Apply corrections
         text = text_segment
-        corrections = get_corrections()
-        for wrong, right in corrections.items():
-            pattern = re.compile(re.escape(wrong), re.IGNORECASE)
+        for pattern, right in _compiled_corrections:
             text = pattern.sub(right, text)
         
         processed_segments.append({
