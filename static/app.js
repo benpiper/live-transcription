@@ -204,7 +204,8 @@ audioToggle.addEventListener('click', () => {
 
     isAudioEnabled = !isAudioEnabled;
     audioToggle.classList.toggle('active', isAudioEnabled);
-    audioToggle.innerHTML = isAudioEnabled ? '<span aria-hidden="true">🔊</span> Mute Audio' : '<span aria-hidden="true">🔇</span> Enable Audio';
+    audioToggle.innerHTML = isAudioEnabled ? '<span class="icon" aria-hidden="true">🔊</span> Mute Audio' : '<span class="icon" aria-hidden="true">🔇</span> Enable Audio';
+    audioToggle.setAttribute('aria-pressed', isAudioEnabled);
 
     // Handle silent audio element for backgrounding
     if (silentAudio) {
@@ -1651,6 +1652,11 @@ function setTheme(newTheme) {
     theme = newTheme;
     document.documentElement.setAttribute('data-theme', theme);
     themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+
+    const label = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    themeToggle.setAttribute('title', label);
+    themeToggle.setAttribute('aria-label', label);
+
     localStorage.setItem('theme', theme);
     updateVisualizerColors(); // Refresh colors for visualizer
 }
@@ -1777,9 +1783,14 @@ function updateScrollLockUI() {
     if (scrollLockBtn) {
         scrollLockBtn.classList.toggle('active', isScrollLocked);
         scrollLockBtn.classList.toggle('locked', isScrollLocked);
-        scrollLockBtn.title = isScrollLocked
+
+        const title = isScrollLocked
             ? 'Scroll paused - Click to resume auto-scroll'
             : 'Auto-scrolling - Scroll up to pause';
+
+        scrollLockBtn.title = title;
+        scrollLockBtn.setAttribute('aria-label', title);
+        scrollLockBtn.setAttribute('aria-pressed', isScrollLocked);
     }
 }
 
