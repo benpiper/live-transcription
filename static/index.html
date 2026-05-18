@@ -24,8 +24,8 @@
                 <button id="sidebar-toggle" class="btn-icon" title="Toggle Settings" aria-label="Toggle Settings" aria-expanded="false" aria-controls="sidebar" style="display: none;">
                     <span aria-hidden="true">⚙️</span>
                 </button>
-                <button id="audio-toggle" class="btn-primary">
-                    <span class="icon">🔇</span> Enable Audio
+                <button id="audio-toggle" class="btn-primary" aria-pressed="false">
+                    <span class="icon" aria-hidden="true">🔇</span> Enable Audio
                 </button>
             </div>
         </header>
@@ -36,7 +36,7 @@
                     <h2>Transcription Feed</h2>
                     <div class="section-header-right">
                         <button id="scroll-lock" class="btn-icon scroll-status"
-                            title="Auto-scrolling - Scroll up to pause">
+                            title="Auto-scrolling - Scroll up to pause" aria-label="Auto-scrolling - Scroll up to pause" aria-pressed="false">
                             <span id="scroll-lock-icon">▼ LIVE</span>
                         </button>
                         <span id="speaker-count" class="text-muted">0 Speakers Detected</span>
