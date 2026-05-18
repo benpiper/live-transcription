@@ -504,6 +504,9 @@ def transcribe_chunk(
             for wrong, right in corrections.items()
         ]
         _last_corrections_ref = corrections
+
+    # Pre-calculate lowercase vocabulary once per chunk, instead of per segment
+    vocab_lower = [v.lower() for v in vocabulary] if vocabulary else []
     
     for segment in segments:
         text_segment = segment.text.strip()
@@ -522,7 +525,6 @@ def transcribe_chunk(
             
         # Enhanced Confidence Filtering: Reject vocab-heavy segments with marginal confidence
         if vocabulary:
-            vocab_lower = [v.lower() for v in vocabulary]
             words = text_segment.lower().split()
             vocab_hits = [w for w in words if any(v in w for v in vocab_lower)]
             
