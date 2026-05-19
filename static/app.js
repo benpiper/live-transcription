@@ -1347,20 +1347,30 @@ function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
     list.innerHTML = '';
 
-    // Sort alphabetically for display
-    const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    const clearBtn = document.getElementById('clear-watchwords');
+    if (clearBtn) {
+        clearBtn.disabled = watchwords.length === 0;
+        clearBtn.title = watchwords.length === 0 ? "No watchwords to clear" : "Clear all watchwords";
+    }
 
-    sortedWatchwords.forEach((word) => {
-        // Find original index for removal
-        const originalIndex = watchwords.indexOf(word);
-        const tag = document.createElement('div');
-        tag.className = 'tag';
-        tag.innerHTML = `
-            ${escapeHtml(word)}
-            <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
-        `;
-        list.appendChild(tag);
-    });
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder" style="width: 100%; min-height: 40px; font-size: 0.8rem; margin: 0;">No watchwords added</div>';
+    } else {
+        // Sort alphabetically for display
+        const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+        sortedWatchwords.forEach((word) => {
+            // Find original index for removal
+            const originalIndex = watchwords.indexOf(word);
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.innerHTML = `
+                ${escapeHtml(word)}
+                <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
+            `;
+            list.appendChild(tag);
+        });
+    }
 }
 
 function addWatchword() {
@@ -1373,6 +1383,10 @@ function addWatchword() {
         reApplyWatchwordHighlights();
         input.value = '';
         
+        // Update button state immediately
+        const addBtn = document.getElementById('add-watchword');
+        if (addBtn) addBtn.disabled = true;
+
         // Auto-navigate to first match
         setTimeout(() => {
             const matches = getMatchedItems();
@@ -1392,6 +1406,7 @@ function removeWatchword(index) {
 }
 
 function clearWatchwords() {
+    if (!confirm("Are you sure you want to clear all watchwords?")) return;
     watchwords = [];
     localStorage.removeItem('watchwords');
     renderWatchwords();
@@ -1556,7 +1571,18 @@ function toggleMatchFilter() {
 
 // Event Listeners for Watchwords
 document.getElementById('add-watchword').addEventListener('click', addWatchword);
-document.getElementById('watchword-input').addEventListener('keypress', (e) => {
+const watchwordInput = document.getElementById('watchword-input');
+const addBtn = document.getElementById('add-watchword');
+if (watchwordInput && addBtn) {
+    // Initial state
+    addBtn.disabled = watchwordInput.value.trim() === '';
+
+    // Dynamic update
+    watchwordInput.addEventListener('input', () => {
+        addBtn.disabled = watchwordInput.value.trim() === '';
+    });
+}
+watchwordInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addWatchword();
 });
 document.getElementById('clear-watchwords').addEventListener('click', clearWatchwords);
