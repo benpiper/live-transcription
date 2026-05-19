@@ -150,6 +150,8 @@ let speakerCountTimeout = null;
 // selectedSpeakers is now defined in the Speaker Filtering section below
 let selectedSpeakers = new Set();  // Empty = show all speakers
 let watchwords = [];
+let watchwordsLower = [];
+let watchwordRegexes = [];
 let theme = 'dark';
 let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
 let sessionLoaded = false;   // Prevents processing new transcripts until session is loaded
@@ -561,18 +563,29 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Performance Optimization: Cache pre-compiled regular expressions and lowercase string arrays
+// when the watchwords configuration changes. This eliminates repetitive instantiation of
+// `new RegExp()` and `.toLowerCase()` during the hot path of UI rendering (which happens for
+// every new transcription chunk and during mass re-rendering of session history).
+// Estimated impact: Significantly reduces CPU time during the mass render loop of session load.
+function updateWatchwordCaches() {
+    watchwordsLower = watchwords.map(w => w.toLowerCase());
+    watchwordRegexes = watchwords.map(word => {
+        const escapedWord = escapeRegExp(word);
+        return new RegExp(`(${escapedWord})`, 'gi');
+    });
+}
+
 function checkWatchwords(text) {
     if (watchwords.length === 0) return false;
     const lowerText = text.toLowerCase();
-    return watchwords.some(word => lowerText.includes(word.toLowerCase()));
+    return watchwordsLower.some(word => lowerText.includes(word));
 }
 
 function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
     if (watchwords.length === 0) return result;
-    for (const word of watchwords) {
-        const escapedWord = escapeRegExp(word);
-        const regex = new RegExp(`(${escapedWord})`, 'gi');
+    for (const regex of watchwordRegexes) {
         result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
     }
     return result;
@@ -1369,6 +1382,7 @@ function addWatchword() {
     if (word && !watchwords.includes(word)) {
         watchwords.push(word);
         localStorage.setItem('watchwords', JSON.stringify(watchwords));
+        updateWatchwordCaches();
         renderWatchwords();
         reApplyWatchwordHighlights();
         input.value = '';
@@ -1387,6 +1401,7 @@ function addWatchword() {
 function removeWatchword(index) {
     watchwords.splice(index, 1);
     localStorage.setItem('watchwords', JSON.stringify(watchwords));
+    updateWatchwordCaches();
     renderWatchwords();
     reApplyWatchwordHighlights();
 }
@@ -1394,6 +1409,7 @@ function removeWatchword(index) {
 function clearWatchwords() {
     watchwords = [];
     localStorage.removeItem('watchwords');
+    updateWatchwordCaches();
     renderWatchwords();
     reApplyWatchwordHighlights();
 }
@@ -1763,6 +1779,7 @@ setTheme(savedTheme);
 const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
+    updateWatchwordCaches();
     renderWatchwords();
 }
 
