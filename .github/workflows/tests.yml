@@ -18,11 +18,15 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
+          cache: pnpm
 
       - name: Install system packages
         run: |
@@ -39,10 +43,10 @@ jobs:
         run: pytest -q tests
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run frontend tests
-        run: npm run test:frontend
+        run: pnpm run test:frontend
