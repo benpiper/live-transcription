@@ -1345,7 +1345,21 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        clearBtn.disabled = true;
+        const emptyState = document.createElement('span');
+        emptyState.className = 'text-muted';
+        emptyState.style.fontSize = '0.8rem';
+        emptyState.style.padding = '4px';
+        emptyState.textContent = 'No watchwords added';
+        list.appendChild(emptyState);
+        return;
+    }
+
+    clearBtn.disabled = false;
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1365,6 +1379,7 @@ function renderWatchwords() {
 
 function addWatchword() {
     const input = document.getElementById('watchword-input');
+    const addBtn = document.getElementById('add-watchword');
     const word = input.value.trim();
     if (word && !watchwords.includes(word)) {
         watchwords.push(word);
@@ -1372,6 +1387,7 @@ function addWatchword() {
         renderWatchwords();
         reApplyWatchwordHighlights();
         input.value = '';
+        addBtn.disabled = true;
         
         // Auto-navigate to first match
         setTimeout(() => {
@@ -1558,6 +1574,9 @@ function toggleMatchFilter() {
 document.getElementById('add-watchword').addEventListener('click', addWatchword);
 document.getElementById('watchword-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addWatchword();
+});
+document.getElementById('watchword-input').addEventListener('input', (e) => {
+    document.getElementById('add-watchword').disabled = e.target.value.trim() === '';
 });
 document.getElementById('clear-watchwords').addEventListener('click', clearWatchwords);
 
