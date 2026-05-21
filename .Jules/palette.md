@@ -17,3 +17,6 @@
 ## 2024-05-24 - Syncing ARIA with Dynamic DOM Updates
 **Learning:** When dynamically updating visual states (like icons) via `innerHTML` in vanilla JS, existing CSS classes (like `.icon` which hides elements on mobile) can be accidentally wiped out, breaking responsive layout. Furthermore, failing to simultaneously update semantic attributes (`aria-pressed`, `aria-label`, `title`) when visuals change causes screen reader states to drift from visual states.
 **Action:** Always verify that `innerHTML` updates preserve critical responsive classes and are accompanied by explicit `setAttribute` calls for `aria-pressed`, `aria-expanded`, `aria-label`, and `title` to maintain UX and a11y parity.
+## 2026-05-21 - [Add Clear History Button to Feed]
+**Learning:** Found a useful destructive function `clearFullHistory` in the JS that wasn't exposed in the UI. Adding a clear button next to the feed header provides an immediate, visible way to manage the transcript state. Using existing `btn-text` class maintained styling consistency, and leveraging native `confirm()` provides accessible warnings for destructive actions.
+**Action:** When finding complex state-clearing functions in the codebase, ensure they have accessible UI controls if they offer clear user value. Always use native confirms or accessible modals for destructive actions.
