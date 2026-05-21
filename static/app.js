@@ -536,8 +536,8 @@ function handleAudioData(data) {
 }
 
 function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return unsafe;
-    return unsafe
+    if (unsafe == null) return "";
+    return String(unsafe)
          .replace(/&/g, "&amp;")
          .replace(/</g, "&lt;")
          .replace(/>/g, "&gt;")
@@ -546,8 +546,8 @@ function escapeHtml(unsafe) {
 }
 
 function escapeJs(unsafe) {
-    if (typeof unsafe !== 'string') return unsafe;
-    return unsafe
+    if (unsafe == null) return "";
+    return String(unsafe)
         .replace(/\\/g, "\\\\")
         .replace(/'/g, "\\'")
         .replace(/"/g, '\\"')
