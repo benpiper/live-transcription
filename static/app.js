@@ -1724,6 +1724,11 @@ if (watchwordCollapseToggle) {
 updateWatchwordCollapseUI();
 
 // History Clearing
+const clearHistoryBtn = document.getElementById('clear-history');
+if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', clearFullHistory);
+}
+
 function clearFullHistory() {
     if (!confirm("Are you sure you want to clear ALL transcription history and audio clips?")) return;
 
