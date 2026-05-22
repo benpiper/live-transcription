@@ -17,3 +17,6 @@
 ## 2024-05-24 - Syncing ARIA with Dynamic DOM Updates
 **Learning:** When dynamically updating visual states (like icons) via `innerHTML` in vanilla JS, existing CSS classes (like `.icon` which hides elements on mobile) can be accidentally wiped out, breaking responsive layout. Furthermore, failing to simultaneously update semantic attributes (`aria-pressed`, `aria-label`, `title`) when visuals change causes screen reader states to drift from visual states.
 **Action:** Always verify that `innerHTML` updates preserve critical responsive classes and are accompanied by explicit `setAttribute` calls for `aria-pressed`, `aria-expanded`, `aria-label`, and `title` to maintain UX and a11y parity.
+## 2024-05-22 - Add Confirm Dialogs to Destructive Actions
+**Learning:** Exposing complex state-clearing or destructive functions in the UI without confirmation leads to poor UX and user anxiety. It is essential to use accessible warnings or native `confirm()` dialogs before performing data deletion or complete state resets (e.g., clearing watchwords or resetting audio configurations).
+**Action:** Always implement native `confirm()` dialogs for state-clearing actions to ensure accessible warnings are present for screen readers and improve overall user confidence before irreversible actions are completed.
