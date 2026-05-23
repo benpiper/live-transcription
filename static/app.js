@@ -1755,6 +1755,10 @@ function clearFullHistory() {
     }
 }
 
+const clearHistoryBtn = document.getElementById('clear-history');
+if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', clearFullHistory);
+}
 
 // Initialization (Remove old call, moved to DB success)
 const savedTheme = localStorage.getItem('theme') || 'dark';

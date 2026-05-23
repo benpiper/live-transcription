@@ -17,3 +17,6 @@
 ## 2024-05-24 - Syncing ARIA with Dynamic DOM Updates
 **Learning:** When dynamically updating visual states (like icons) via `innerHTML` in vanilla JS, existing CSS classes (like `.icon` which hides elements on mobile) can be accidentally wiped out, breaking responsive layout. Furthermore, failing to simultaneously update semantic attributes (`aria-pressed`, `aria-label`, `title`) when visuals change causes screen reader states to drift from visual states.
 **Action:** Always verify that `innerHTML` updates preserve critical responsive classes and are accompanied by explicit `setAttribute` calls for `aria-pressed`, `aria-expanded`, `aria-label`, and `title` to maintain UX and a11y parity.
+## 2026-05-23 - [Discoverability of Destructive Actions]
+**Learning:** Found that the `clearFullHistory` function existed in the codebase but lacked any UI triggering mechanism, meaning users could never execute it to clear out old transcription data without refreshing the page or clearing site data.
+**Action:** When auditing code for unused functions, look for destructive or reset functions that were stubbed out but never wired to the UI. Ensure any exposed destructive actions are protected by a confirmation dialog (like `confirm()`) and use clear iconography (like a trashcan) with explicit ARIA labels.
