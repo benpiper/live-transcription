@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 test('Watchword highlights work efficiently', async ({ page }) => {
   // Navigate to the live preview (will be started in a separate command)
-  await page.goto('http://localhost:3000');
+  await page.goto('/');
 
   // Verify the page loads
   await expect(page).toHaveTitle(/Live Transcription/);
