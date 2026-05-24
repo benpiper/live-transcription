@@ -1044,6 +1044,7 @@ document.getElementById('deselect-all-speakers').addEventListener('click', () =>
 
 // Reset/Clear button
 document.getElementById('reset-filters').addEventListener('click', () => {
+    if (!confirm("Are you sure you want to clear all speaker filters?")) return;
     selectedSpeakers.clear();
     document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
         cb.checked = true;
@@ -1392,6 +1393,7 @@ function removeWatchword(index) {
 }
 
 function clearWatchwords() {
+    if (!confirm("Are you sure you want to clear all watchwords?")) return;
     watchwords = [];
     localStorage.removeItem('watchwords');
     renderWatchwords();
@@ -1919,6 +1921,7 @@ if (scrollLockBtn) {
 
     // Reset to defaults
     resetBtn.addEventListener('click', () => {
+        if (!confirm("Are you sure you want to reset audio processing to default settings?")) return;
         thresholdSlider.value = DEFAULTS.threshold;
         ratioSlider.value = DEFAULTS.ratio;
         attackSlider.value = DEFAULTS.attack;
