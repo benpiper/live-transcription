@@ -12,3 +12,8 @@
 **Vulnerability:** User-controlled watchwords were directly interpolated into a `new RegExp()` constructor in `static/app.js` without sanitization. This allowed users to input regex special characters, leading to Regex Injection and potential Regular Expression Denial of Service (ReDoS) which could crash or slow down the frontend.
 **Learning:** Any user-provided strings used to construct regular expressions dynamically must be sanitized.
 **Prevention:** Always use an `escapeRegExp` function (like `string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`) on user input before passing it to the `RegExp` constructor.
+
+## 2024-05-28 - [XSS Bypass via Type Confusion in Escaping Functions]
+**Vulnerability:** The sanitization functions `escapeHtml`, `escapeJs`, and `escapeRegExp` in the frontend skipped sanitization if the input was not a string (`typeof unsafe !== 'string'`). This allowed an attacker to pass an array like `["<script>alert(1)</script>"]` which bypassed the replacement logic but was still implicitly converted to a string when interpolated into HTML templates (e.g. `innerHTML`), resulting in XSS.
+**Learning:** Type checking alone is insufficient for sanitization functions used in string interpolation. Complex objects or arrays can bypass type checks but still serialize to malicious strings via implicit `.toString()` calls in JavaScript template literals.
+**Prevention:** Always explicitly handle `null`/`undefined` and cast the input to a string (e.g. `String(unsafe)`) before performing regex replacements in escaping functions to ensure all data types are safely sanitized.
