@@ -10,3 +10,6 @@
 ## 2025-03-05 - Avoid Redundant Configuration Transformations in Loops
 **Learning:** Performing list comprehensions with string transformations (e.g., `[v.lower() for v in vocabulary]`) inside hot paths like `transcribe_chunk`'s segment processing loop incurs a measurable performance penalty due to unnecessary allocations and function calls. However, globally caching mutable objects like lists is brittle and dangerous, causing `TypeError`s if a configuration can ever return `None` or is mutated.
 **Action:** When a static configuration structure like vocabulary is needed in a hot loop, compute the transformed version *once* at the beginning of the function call (e.g. `vocab_lower = [v.lower() for v in vocabulary] if vocabulary else []`) rather than re-evaluating it for every segment inside the loop.
+## 2025-05-30 - Cached Dynamic Watchword Configurations in JS Hot Loop
+**Learning:** In the vanilla JS frontend (`static/app.js`), dynamically recreating regex objects (`new RegExp()`) and converting strings (`.toLowerCase()`) during the real-time transcript streaming loop causes severe rendering latency.
+**Action:** Pre-compile regular expressions and cache transformed strings globally whenever the underlying source configuration (e.g., watchwords) changes, avoiding repetitive operations in UI rendering hot paths.
