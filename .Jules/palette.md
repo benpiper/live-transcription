@@ -17,3 +17,6 @@
 ## 2024-05-24 - Syncing ARIA with Dynamic DOM Updates
 **Learning:** When dynamically updating visual states (like icons) via `innerHTML` in vanilla JS, existing CSS classes (like `.icon` which hides elements on mobile) can be accidentally wiped out, breaking responsive layout. Furthermore, failing to simultaneously update semantic attributes (`aria-pressed`, `aria-label`, `title`) when visuals change causes screen reader states to drift from visual states.
 **Action:** Always verify that `innerHTML` updates preserve critical responsive classes and are accompanied by explicit `setAttribute` calls for `aria-pressed`, `aria-expanded`, `aria-label`, and `title` to maintain UX and a11y parity.
+## 2026-05-25 - [Loading States for Async Playback]
+**Learning:** Found that asynchronous playback actions lacked loading states, causing UI to show incorrect states before network requests completed. Also discovered destructive actions missing confirmation.
+**Action:** When an action involves a network request (like fetching audio), immediately show a loading state, disable the element, and only switch to the active state when the action actually succeeds. Use a `finally` or `catch` block to ensure UI recovery on failure. Add `confirm` dialogs for clear/delete actions.

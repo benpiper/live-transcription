@@ -1219,10 +1219,10 @@ async function playSegment(id) {
 
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
-        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
-        btn.classList.add('playing');
-        btn.setAttribute('title', 'Pause audio');
-        btn.setAttribute('aria-label', 'Pause audio segment');
+        btn.innerHTML = '<span aria-hidden="true">⏳</span>';
+        btn.setAttribute('title', 'Loading audio...');
+        btn.setAttribute('aria-label', 'Loading audio segment');
+        btn.disabled = true;
     }
 
     try {
@@ -1236,6 +1236,12 @@ async function playSegment(id) {
         );
 
         if (!response.ok) {
+            if (btn) {
+                btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+                btn.setAttribute('title', 'Play audio');
+                btn.setAttribute('aria-label', 'Play audio segment');
+                btn.disabled = false;
+            }
             if (response.status === 400) {
                 console.warn("Audio not available (outside buffer window)");
                 // Try fallback to rawAudioHistory if available
@@ -1258,12 +1264,26 @@ async function playSegment(id) {
 
     } catch (error) {
         console.error("Error loading audio:", error);
+        if (btn) {
+            btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+            btn.setAttribute('title', 'Play audio');
+            btn.setAttribute('aria-label', 'Play audio segment');
+            btn.disabled = false;
+        }
         alert("Failed to load audio segment");
     }
 }
 
 // Helper function to play audio from Float32 data
 function playAudioBuffer(audioData, id, btn, context) {
+    if (btn) {
+        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
+        btn.classList.add('playing');
+        btn.setAttribute('title', 'Pause audio');
+        btn.setAttribute('aria-label', 'Pause audio segment');
+        btn.disabled = false;
+    }
+
     // 3. Mute live audio
     if (!isPlaybackMuted) {
         liveAudioEnabledBeforePlayback = isAudioEnabled;
@@ -1392,10 +1412,12 @@ function removeWatchword(index) {
 }
 
 function clearWatchwords() {
-    watchwords = [];
-    localStorage.removeItem('watchwords');
-    renderWatchwords();
-    reApplyWatchwordHighlights();
+    if (confirm("Are you sure you want to clear all watchwords?")) {
+        watchwords = [];
+        localStorage.removeItem('watchwords');
+        renderWatchwords();
+        reApplyWatchwordHighlights();
+    }
 }
 
 function reApplyWatchwordHighlights() {
