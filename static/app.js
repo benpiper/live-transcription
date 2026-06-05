@@ -1219,10 +1219,10 @@ async function playSegment(id) {
 
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
-        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
-        btn.classList.add('playing');
-        btn.setAttribute('title', 'Pause audio');
-        btn.setAttribute('aria-label', 'Pause audio segment');
+        btn.innerHTML = '<span aria-hidden="true">⏳</span>';
+        btn.setAttribute('title', 'Loading audio...');
+        btn.setAttribute('aria-label', 'Loading audio segment');
+        btn.disabled = true;
     }
 
     try {
@@ -1242,11 +1242,30 @@ async function playSegment(id) {
                 const historyAudio = getAudioFromHistory(originTime);
                 if (historyAudio && historyAudio.length > 0) {
                     console.log("Using fallback audio from history");
+                    if (btn) {
+                        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
+                        btn.classList.add('playing');
+                        btn.setAttribute('title', 'Pause audio');
+                        btn.setAttribute('aria-label', 'Pause audio segment');
+                        btn.disabled = false;
+                    }
                     playAudioBuffer(historyAudio, id, btn, context);
                 } else {
+                    if (btn) {
+                        btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+                        btn.setAttribute('title', 'Play audio');
+                        btn.setAttribute('aria-label', 'Play audio segment');
+                        btn.disabled = false;
+                    }
                     alert("Audio not available for playback. This segment is outside the 2-hour buffer window.");
                 }
             } else {
+                if (btn) {
+                    btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+                    btn.setAttribute('title', 'Play audio');
+                    btn.setAttribute('aria-label', 'Play audio segment');
+                    btn.disabled = false;
+                }
                 alert("Failed to load audio segment");
             }
             return;
@@ -1254,10 +1273,24 @@ async function playSegment(id) {
 
         const arrayBuffer = await response.arrayBuffer();
         const floatData = new Float32Array(arrayBuffer);
+
+        if (btn) {
+            btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
+            btn.classList.add('playing');
+            btn.setAttribute('title', 'Pause audio');
+            btn.setAttribute('aria-label', 'Pause audio segment');
+            btn.disabled = false;
+        }
         playAudioBuffer(floatData, id, btn, context);
 
     } catch (error) {
         console.error("Error loading audio:", error);
+        if (btn) {
+            btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+            btn.setAttribute('title', 'Play audio');
+            btn.setAttribute('aria-label', 'Play audio segment');
+            btn.disabled = false;
+        }
         alert("Failed to load audio segment");
     }
 }
