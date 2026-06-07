@@ -536,7 +536,8 @@ function handleAudioData(data) {
 }
 
 function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return unsafe;
+    if (unsafe == null) return '';
+    unsafe = String(unsafe);
     return unsafe
          .replace(/&/g, "&amp;")
          .replace(/</g, "&lt;")
@@ -546,7 +547,8 @@ function escapeHtml(unsafe) {
 }
 
 function escapeJs(unsafe) {
-    if (typeof unsafe !== 'string') return unsafe;
+    if (unsafe == null) return '';
+    unsafe = String(unsafe);
     return unsafe
         .replace(/\\/g, "\\\\")
         .replace(/'/g, "\\'")
@@ -557,8 +559,10 @@ function escapeJs(unsafe) {
         .replace(/>/g, "\\x3e");
 }
 
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function escapeRegExp(unsafe) {
+    if (unsafe == null) return '';
+    unsafe = String(unsafe);
+    return unsafe.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function checkWatchwords(text) {
