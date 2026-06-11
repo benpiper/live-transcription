@@ -17,3 +17,10 @@
 ## 2024-05-24 - Syncing ARIA with Dynamic DOM Updates
 **Learning:** When dynamically updating visual states (like icons) via `innerHTML` in vanilla JS, existing CSS classes (like `.icon` which hides elements on mobile) can be accidentally wiped out, breaking responsive layout. Furthermore, failing to simultaneously update semantic attributes (`aria-pressed`, `aria-label`, `title`) when visuals change causes screen reader states to drift from visual states.
 **Action:** Always verify that `innerHTML` updates preserve critical responsive classes and are accompanied by explicit `setAttribute` calls for `aria-pressed`, `aria-expanded`, `aria-label`, and `title` to maintain UX and a11y parity.
+## 2026-06-11 - [Loading States for Async Button Actions]
+**Learning:** The async audio play button (`playSegment`) lacked visual feedback during fetch, meaning users could click multiple times or think the application froze while the fetch occurred. Simply changing the button's inner HTML to an hourglass icon and adding `aria-label="Loading audio clip"` during the fetch improved the UX and accessibility.
+**Action:** When working on asynchronous actions tied to a button click (like fetching a file or saving data), always disable the button and add an explicit loading state (like an hourglass or spinner) along with an updated `aria-label`. Use a `finally` block to guarantee the button state is restored regardless of success or failure.
+
+## 2026-06-11 - [Confirmation for Destructive UI Actions]
+**Learning:** The `clearWatchwords` function cleared all watchwords instantly without any warning. This could lead to accidental data loss.
+**Action:** When exposing complex state-clearing or destructive functions in the UI, always implement accessible warnings using native `confirm()` dialogs or accessible modals.
