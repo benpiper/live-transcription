@@ -1219,12 +1219,13 @@ async function playSegment(id) {
 
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
-        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
-        btn.classList.add('playing');
-        btn.setAttribute('title', 'Pause audio');
-        btn.setAttribute('aria-label', 'Pause audio segment');
+        btn.innerHTML = '<span aria-hidden="true">⏳</span>';
+        btn.setAttribute('title', 'Loading audio...');
+        btn.setAttribute('aria-label', 'Loading audio segment');
+        btn.disabled = true;
     }
 
+    let played = false;
     try {
         // Use transcript's exact duration for playback
         const duration = item.duration || 5.0;  // Fallback to 5s if duration missing
@@ -1243,6 +1244,7 @@ async function playSegment(id) {
                 if (historyAudio && historyAudio.length > 0) {
                     console.log("Using fallback audio from history");
                     playAudioBuffer(historyAudio, id, btn, context);
+                    played = true;
                 } else {
                     alert("Audio not available for playback. This segment is outside the 2-hour buffer window.");
                 }
@@ -1255,15 +1257,32 @@ async function playSegment(id) {
         const arrayBuffer = await response.arrayBuffer();
         const floatData = new Float32Array(arrayBuffer);
         playAudioBuffer(floatData, id, btn, context);
+        played = true;
 
     } catch (error) {
         console.error("Error loading audio:", error);
         alert("Failed to load audio segment");
+    } finally {
+        if (!played && btn) {
+            btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+            btn.classList.remove('playing');
+            btn.setAttribute('title', 'Play audio');
+            btn.setAttribute('aria-label', 'Play audio segment');
+            btn.disabled = false;
+        }
     }
 }
 
 // Helper function to play audio from Float32 data
 function playAudioBuffer(audioData, id, btn, context) {
+    if (btn) {
+        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
+        btn.classList.add('playing');
+        btn.setAttribute('title', 'Pause audio');
+        btn.setAttribute('aria-label', 'Pause audio segment');
+        btn.disabled = false;
+    }
+
     // 3. Mute live audio
     if (!isPlaybackMuted) {
         liveAudioEnabledBeforePlayback = isAudioEnabled;
