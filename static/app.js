@@ -1392,6 +1392,7 @@ function removeWatchword(index) {
 }
 
 function clearWatchwords() {
+    if (!confirm("Are you sure you want to clear all watchwords?")) return;
     watchwords = [];
     localStorage.removeItem('watchwords');
     renderWatchwords();
