@@ -706,6 +706,9 @@ function createTranscriptElement(data, fromSession = false) {
     return item;
 }
 
+// Expose for testing
+window.addTranscriptItem = addTranscriptItem;
+
 function addTranscriptItem(data, fromSession = false) {
     // Remove placeholder
     const placeholder = transcriptFeed.querySelector('.placeholder');
@@ -1219,11 +1222,13 @@ async function playSegment(id) {
 
     const btn = document.querySelector(`[data-id="${id}"] .play-btn`);
     if (btn) {
-        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
-        btn.classList.add('playing');
-        btn.setAttribute('title', 'Pause audio');
-        btn.setAttribute('aria-label', 'Pause audio segment');
+        btn.innerHTML = '<span aria-hidden="true">⏳</span>';
+        btn.setAttribute('title', 'Loading audio...');
+        btn.setAttribute('aria-label', 'Loading audio segment');
+        btn.disabled = true;
     }
+
+    let isSuccess = false;
 
     try {
         // Use transcript's exact duration for playback
@@ -1242,23 +1247,48 @@ async function playSegment(id) {
                 const historyAudio = getAudioFromHistory(originTime);
                 if (historyAudio && historyAudio.length > 0) {
                     console.log("Using fallback audio from history");
+                    isSuccess = true;
+                    if (btn) {
+                        btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
+                        btn.classList.add('playing');
+                        btn.setAttribute('title', 'Pause audio');
+                        btn.setAttribute('aria-label', 'Pause audio segment');
+                    }
                     playAudioBuffer(historyAudio, id, btn, context);
                 } else {
-                    alert("Audio not available for playback. This segment is outside the 2-hour buffer window.");
+                    showSystemAlert('error', 'Audio not available', 'This segment is outside the 2-hour buffer window.');
                 }
             } else {
-                alert("Failed to load audio segment");
+                showSystemAlert('error', 'Failed to load audio segment', `Server returned ${response.status}`);
             }
             return;
         }
 
         const arrayBuffer = await response.arrayBuffer();
         const floatData = new Float32Array(arrayBuffer);
+
+        isSuccess = true;
+        if (btn) {
+            btn.innerHTML = '<span aria-hidden="true">⏸️</span>';
+            btn.classList.add('playing');
+            btn.setAttribute('title', 'Pause audio');
+            btn.setAttribute('aria-label', 'Pause audio segment');
+        }
         playAudioBuffer(floatData, id, btn, context);
 
     } catch (error) {
         console.error("Error loading audio:", error);
-        alert("Failed to load audio segment");
+        showSystemAlert('error', 'Failed to load audio segment', error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            if (!isSuccess) {
+                btn.innerHTML = '<span aria-hidden="true">▶️</span>';
+                btn.classList.remove('playing');
+                btn.setAttribute('title', 'Play audio');
+                btn.setAttribute('aria-label', 'Play audio segment');
+            }
+        }
     }
 }
 
