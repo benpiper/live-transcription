@@ -10,3 +10,6 @@
 ## 2025-03-05 - Avoid Redundant Configuration Transformations in Loops
 **Learning:** Performing list comprehensions with string transformations (e.g., `[v.lower() for v in vocabulary]`) inside hot paths like `transcribe_chunk`'s segment processing loop incurs a measurable performance penalty due to unnecessary allocations and function calls. However, globally caching mutable objects like lists is brittle and dangerous, causing `TypeError`s if a configuration can ever return `None` or is mutated.
 **Action:** When a static configuration structure like vocabulary is needed in a hot loop, compute the transformed version *once* at the beginning of the function call (e.g. `vocab_lower = [v.lower() for v in vocabulary] if vocabulary else []`) rather than re-evaluating it for every segment inside the loop.
+## 2025-06-15 - Pre-compile Regular Expressions in UI Hot Paths
+**Learning:** In the vanilla JS frontend (`static/app.js`), instantiating new `RegExp` objects and transforming strings (e.g., `.toLowerCase()`) inside UI rendering hot paths like `highlightWatchwords` and `checkWatchwords` causes unnecessary memory allocation and performance degradation, especially as transcriptions update in real time.
+**Action:** Pre-compile regular expressions and cache transformed strings globally whenever their source configuration (e.g., `watchwords`) changes.
