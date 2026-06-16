@@ -54,6 +54,10 @@ _COMPILED_HALLUCINATION_PATTERNS = [
 _last_corrections_ref = None
 _compiled_corrections = []
 
+# Cache for lowercase vocabulary
+_last_vocab_ref = None
+_vocab_lower_cache = []
+
 
 # Device state tracking
 _active_device = None        # 'cuda' or 'cpu' - what we're currently running on
@@ -495,8 +499,8 @@ def transcribe_chunk(
     no_speech_prob_cutoff = settings.get("no_speech_prob_cutoff", 0.2)
     extreme_conf_cutoff = settings.get("extreme_confidence_cutoff", -0.4)
     
-    # Update corrections cache if needed
-    global _last_corrections_ref, _compiled_corrections
+    # Update caches if needed
+    global _last_corrections_ref, _compiled_corrections, _last_vocab_ref, _vocab_lower_cache
     corrections = get_corrections()
     if corrections != _last_corrections_ref:
         _compiled_corrections = [
@@ -505,8 +509,11 @@ def transcribe_chunk(
         ]
         _last_corrections_ref = corrections
 
-    # Pre-calculate lowercase vocabulary once per chunk, instead of per segment
-    vocab_lower = [v.lower() for v in vocabulary] if vocabulary else []
+    # Update vocabulary lowercasing cache if needed
+    if vocabulary is not _last_vocab_ref:
+        _vocab_lower_cache = [v.lower() for v in vocabulary] if vocabulary else []
+        _last_vocab_ref = vocabulary
+    vocab_lower = _vocab_lower_cache
     
     for segment in segments:
         text_segment = segment.text.strip()
