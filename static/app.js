@@ -150,6 +150,8 @@ let speakerCountTimeout = null;
 // selectedSpeakers is now defined in the Speaker Filtering section below
 let selectedSpeakers = new Set();  // Empty = show all speakers
 let watchwords = [];
+let watchwordsLower = [];
+let watchwordsRegExps = [];
 let theme = 'dark';
 let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
 let sessionLoaded = false;   // Prevents processing new transcripts until session is loaded
@@ -561,18 +563,28 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function updateWatchwordsCache() {
+    // ⚡ Bolt Performance Optimization:
+    // Pre-compile regex and cache lowercase strings when watchwords change
+    // to avoid recreating them inside the rendering loop.
+    watchwordsLower = watchwords.map(w => w.toLowerCase());
+    watchwordsRegExps = watchwords.map(w => new RegExp(`(${escapeRegExp(w)})`, 'gi'));
+}
+
 function checkWatchwords(text) {
     if (watchwords.length === 0) return false;
     const lowerText = text.toLowerCase();
-    return watchwords.some(word => lowerText.includes(word.toLowerCase()));
+    return watchwordsLower.some(word => lowerText.includes(word));
 }
 
 function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
     if (watchwords.length === 0) return result;
-    for (const word of watchwords) {
-        const escapedWord = escapeRegExp(word);
-        const regex = new RegExp(`(${escapedWord})`, 'gi');
+
+    // ⚡ Bolt Performance Optimization:
+    // Reusing cached RegExp objects eliminates RegExp compilation overhead
+    // and reduces garbage collection pressure on every render.
+    for (const regex of watchwordsRegExps) {
         result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
     }
     return result;
@@ -1368,6 +1380,7 @@ function addWatchword() {
     const word = input.value.trim();
     if (word && !watchwords.includes(word)) {
         watchwords.push(word);
+        updateWatchwordsCache();
         localStorage.setItem('watchwords', JSON.stringify(watchwords));
         renderWatchwords();
         reApplyWatchwordHighlights();
@@ -1386,6 +1399,7 @@ function addWatchword() {
 
 function removeWatchword(index) {
     watchwords.splice(index, 1);
+    updateWatchwordsCache();
     localStorage.setItem('watchwords', JSON.stringify(watchwords));
     renderWatchwords();
     reApplyWatchwordHighlights();
@@ -1393,6 +1407,7 @@ function removeWatchword(index) {
 
 function clearWatchwords() {
     watchwords = [];
+    updateWatchwordsCache();
     localStorage.removeItem('watchwords');
     renderWatchwords();
     reApplyWatchwordHighlights();
@@ -1763,6 +1778,7 @@ setTheme(savedTheme);
 const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
+    updateWatchwordsCache();
     renderWatchwords();
 }
 
