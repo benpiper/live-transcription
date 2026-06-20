@@ -561,20 +561,39 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+let compiledWatchwordsRegex = null;
+let watchwordsCacheKey = null;
+
+function _updateWatchwordsCache() {
+    const currentKey = JSON.stringify(watchwords);
+    if (currentKey !== watchwordsCacheKey) {
+        watchwordsCacheKey = currentKey;
+        // Sort watchwords by length descending to match longer words first
+        const sortedWords = [...watchwords].sort((a, b) => b.length - a.length);
+        const escapedWords = sortedWords.map(escapeRegExp);
+        compiledWatchwordsRegex = new RegExp(`(${escapedWords.join('|')})`, 'gi');
+    }
+}
+
 function checkWatchwords(text) {
     if (watchwords.length === 0) return false;
-    const lowerText = text.toLowerCase();
-    return watchwords.some(word => lowerText.includes(word.toLowerCase()));
+
+    _updateWatchwordsCache();
+
+    compiledWatchwordsRegex.lastIndex = 0;
+    return compiledWatchwordsRegex.test(text);
 }
 
 function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
     if (watchwords.length === 0) return result;
-    for (const word of watchwords) {
-        const escapedWord = escapeRegExp(word);
-        const regex = new RegExp(`(${escapedWord})`, 'gi');
-        result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
+
+    _updateWatchwordsCache();
+
+    if (compiledWatchwordsRegex) {
+        result = result.replace(compiledWatchwordsRegex, '<mark class="watchword-highlight">$1</mark>');
     }
+
     return result;
 }
 
