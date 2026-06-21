@@ -17,3 +17,6 @@
 ## 2024-05-24 - Syncing ARIA with Dynamic DOM Updates
 **Learning:** When dynamically updating visual states (like icons) via `innerHTML` in vanilla JS, existing CSS classes (like `.icon` which hides elements on mobile) can be accidentally wiped out, breaking responsive layout. Furthermore, failing to simultaneously update semantic attributes (`aria-pressed`, `aria-label`, `title`) when visuals change causes screen reader states to drift from visual states.
 **Action:** Always verify that `innerHTML` updates preserve critical responsive classes and are accompanied by explicit `setAttribute` calls for `aria-pressed`, `aria-expanded`, `aria-label`, and `title` to maintain UX and a11y parity.
+## 2024-05-24 - [Replace Native Alerts with In-App Notifications]
+**Learning:** The use of native `alert()` for errors or warnings blocks the main thread, which is highly disruptive for real-time applications like a live transcription feed.
+**Action:** Always replace blocking `alert()` calls with a non-blocking in-app notification system (e.g., `showSystemAlert`) to improve UX and ensure the feed remains live.
