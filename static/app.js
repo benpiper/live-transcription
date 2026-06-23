@@ -150,6 +150,18 @@ let speakerCountTimeout = null;
 // selectedSpeakers is now defined in the Speaker Filtering section below
 let selectedSpeakers = new Set();  // Empty = show all speakers
 let watchwords = [];
+let cachedWatchwordRegex = null;
+
+function updateWatchwordRegex() {
+    if (watchwords.length === 0) {
+        cachedWatchwordRegex = null;
+        return;
+    }
+    // Sort descending by length to match longer words first
+    const sorted = [...watchwords].sort((a, b) => b.length - a.length);
+    const escaped = sorted.map(escapeRegExp);
+    cachedWatchwordRegex = new RegExp(`(${escaped.join('|')})`, 'gi');
+}
 let theme = 'dark';
 let isScrollLocked = false;  // When true, don't auto-scroll on new transcripts
 let sessionLoaded = false;   // Prevents processing new transcripts until session is loaded
@@ -562,20 +574,16 @@ function escapeRegExp(string) {
 }
 
 function checkWatchwords(text) {
-    if (watchwords.length === 0) return false;
-    const lowerText = text.toLowerCase();
-    return watchwords.some(word => lowerText.includes(word.toLowerCase()));
+    if (!cachedWatchwordRegex) return false;
+    cachedWatchwordRegex.lastIndex = 0;
+    return cachedWatchwordRegex.test(text);
 }
 
 function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
-    if (watchwords.length === 0) return result;
-    for (const word of watchwords) {
-        const escapedWord = escapeRegExp(word);
-        const regex = new RegExp(`(${escapedWord})`, 'gi');
-        result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
-    }
-    return result;
+    if (!cachedWatchwordRegex) return result;
+    cachedWatchwordRegex.lastIndex = 0;
+    return result.replace(cachedWatchwordRegex, '<mark class="watchword-highlight">$1</mark>');
 }
 
 function triggerNotification(text) {
@@ -1368,6 +1376,7 @@ function addWatchword() {
     const word = input.value.trim();
     if (word && !watchwords.includes(word)) {
         watchwords.push(word);
+        updateWatchwordRegex();
         localStorage.setItem('watchwords', JSON.stringify(watchwords));
         renderWatchwords();
         reApplyWatchwordHighlights();
@@ -1386,6 +1395,7 @@ function addWatchword() {
 
 function removeWatchword(index) {
     watchwords.splice(index, 1);
+    updateWatchwordRegex();
     localStorage.setItem('watchwords', JSON.stringify(watchwords));
     renderWatchwords();
     reApplyWatchwordHighlights();
@@ -1393,6 +1403,7 @@ function removeWatchword(index) {
 
 function clearWatchwords() {
     watchwords = [];
+    updateWatchwordRegex();
     localStorage.removeItem('watchwords');
     renderWatchwords();
     reApplyWatchwordHighlights();
@@ -1763,6 +1774,7 @@ setTheme(savedTheme);
 const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
+    updateWatchwordRegex();
     renderWatchwords();
 }
 
