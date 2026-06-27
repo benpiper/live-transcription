@@ -54,7 +54,6 @@ _COMPILED_HALLUCINATION_PATTERNS = [
 _last_corrections_ref = None
 _compiled_corrections = []
 
-
 # Device state tracking
 _active_device = None        # 'cuda' or 'cpu' - what we're currently running on
 _intended_device = None      # What the user/config wanted
@@ -498,7 +497,7 @@ def transcribe_chunk(
     # Update corrections cache if needed
     global _last_corrections_ref, _compiled_corrections
     corrections = get_corrections()
-    if corrections != _last_corrections_ref:
+    if corrections is not _last_corrections_ref:
         _compiled_corrections = [
             (re.compile(re.escape(wrong), re.IGNORECASE), right)
             for wrong, right in corrections.items()
