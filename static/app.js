@@ -1060,7 +1060,7 @@ async function downloadSegment(id) {
     if (!item) {
         console.error("Item not found for download:", id);
         console.log("Available items:", transcriptionHistory.map(h => h.id).slice(-5));
-        alert("Transcript item not found");
+        showSystemAlert('error', "Transcript item not found");
         return;
     }
 
@@ -1100,9 +1100,9 @@ async function downloadSegment(id) {
 
         if (!response.ok) {
             if (response.status === 400) {
-                alert("Audio not available. This segment is outside the audio buffer window (2 hours).");
+                showSystemAlert('warning', "Audio not available", "This segment is outside the audio buffer window (2 hours).");
             } else {
-                alert("Failed to download audio segment");
+                showSystemAlert('error', "Failed to download audio segment");
             }
             return;
         }
@@ -1117,7 +1117,7 @@ async function downloadSegment(id) {
 
     } catch (error) {
         console.error("Error downloading audio:", error);
-        alert("Failed to download audio segment");
+        showSystemAlert('error', "Failed to download audio segment", error.message);
     } finally {
         if (btn) {
             btn.innerHTML = '<span aria-hidden="true">📥</span>';
@@ -1244,10 +1244,10 @@ async function playSegment(id) {
                     console.log("Using fallback audio from history");
                     playAudioBuffer(historyAudio, id, btn, context);
                 } else {
-                    alert("Audio not available for playback. This segment is outside the 2-hour buffer window.");
+                    showSystemAlert('warning', "Audio not available for playback", "This segment is outside the 2-hour buffer window.");
                 }
             } else {
-                alert("Failed to load audio segment");
+                showSystemAlert('error', "Failed to load audio segment");
             }
             return;
         }
@@ -1258,7 +1258,7 @@ async function playSegment(id) {
 
     } catch (error) {
         console.error("Error loading audio:", error);
-        alert("Failed to load audio segment");
+        showSystemAlert('error', "Failed to load audio segment", error.message);
     }
 }
 
@@ -1599,7 +1599,7 @@ function updateNotificationButton() {
 if (notificationBtn) {
     notificationBtn.addEventListener('click', async () => {
         if (!("Notification" in window)) {
-            alert("This browser does not support desktop notifications.");
+            showSystemAlert('error', "Desktop notifications not supported", "This browser does not support desktop notifications.");
             return;
         }
 
@@ -1610,12 +1610,12 @@ if (notificationBtn) {
 
         if (Notification.permission === 'denied') {
             const browser = getBrowserName();
-            const msg = `Notifications are blocked by your ${browser} settings.\n\n` +
-                `How to fix:\n` +
-                `1. Click the 'Locks/Settings' icon next to the URL in the address bar.\n` +
-                `2. Change the 'Notifications' setting to 'Allow'.\n` +
+            const msg = `Notifications are blocked by your ${browser} settings. ` +
+                `How to fix: ` +
+                `1. Click the 'Locks/Settings' icon next to the URL in the address bar. ` +
+                `2. Change the 'Notifications' setting to 'Allow'. ` +
                 `3. Refresh this page.`;
-            alert(msg);
+            showSystemAlert('warning', "Notifications blocked", msg);
             return;
         }
 
