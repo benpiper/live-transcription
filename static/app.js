@@ -561,21 +561,29 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+let cachedWatchwordsRegex = null;
+
+function updateWatchwordsCache() {
+    if (watchwords.length === 0) {
+        cachedWatchwordsRegex = null;
+        return;
+    }
+    const sorted = [...watchwords].sort((a, b) => b.length - a.length);
+    const escaped = sorted.map(escapeRegExp);
+    cachedWatchwordsRegex = new RegExp(`(${escaped.join('|')})`, 'gi');
+}
+
 function checkWatchwords(text) {
-    if (watchwords.length === 0) return false;
-    const lowerText = text.toLowerCase();
-    return watchwords.some(word => lowerText.includes(word.toLowerCase()));
+    if (!cachedWatchwordsRegex || !text) return false;
+    cachedWatchwordsRegex.lastIndex = 0;
+    return cachedWatchwordsRegex.test(text);
 }
 
 function highlightWatchwords(text) {
     let result = escapeHtml(text || '');
-    if (watchwords.length === 0) return result;
-    for (const word of watchwords) {
-        const escapedWord = escapeRegExp(word);
-        const regex = new RegExp(`(${escapedWord})`, 'gi');
-        result = result.replace(regex, '<mark class="watchword-highlight">$1</mark>');
-    }
-    return result;
+    if (!cachedWatchwordsRegex) return result;
+    cachedWatchwordsRegex.lastIndex = 0;
+    return result.replace(cachedWatchwordsRegex, '<mark class="watchword-highlight">$1</mark>');
 }
 
 function triggerNotification(text) {
@@ -1369,6 +1377,7 @@ function addWatchword() {
     if (word && !watchwords.includes(word)) {
         watchwords.push(word);
         localStorage.setItem('watchwords', JSON.stringify(watchwords));
+        updateWatchwordsCache();
         renderWatchwords();
         reApplyWatchwordHighlights();
         input.value = '';
@@ -1387,6 +1396,7 @@ function addWatchword() {
 function removeWatchword(index) {
     watchwords.splice(index, 1);
     localStorage.setItem('watchwords', JSON.stringify(watchwords));
+    updateWatchwordsCache();
     renderWatchwords();
     reApplyWatchwordHighlights();
 }
@@ -1394,6 +1404,7 @@ function removeWatchword(index) {
 function clearWatchwords() {
     watchwords = [];
     localStorage.removeItem('watchwords');
+    updateWatchwordsCache();
     renderWatchwords();
     reApplyWatchwordHighlights();
 }
@@ -1763,6 +1774,7 @@ setTheme(savedTheme);
 const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
+    updateWatchwordsCache();
     renderWatchwords();
 }
 
