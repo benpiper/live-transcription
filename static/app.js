@@ -1392,6 +1392,8 @@ function removeWatchword(index) {
 }
 
 function clearWatchwords() {
+    if (watchwords.length === 0) return;
+    if (!confirm("Are you sure you want to clear all watchwords?")) return;
     watchwords = [];
     localStorage.removeItem('watchwords');
     renderWatchwords();
@@ -1919,6 +1921,7 @@ if (scrollLockBtn) {
 
     // Reset to defaults
     resetBtn.addEventListener('click', () => {
+        if (!confirm("Are you sure you want to reset audio processing settings to defaults?")) return;
         thresholdSlider.value = DEFAULTS.threshold;
         ratioSlider.value = DEFAULTS.ratio;
         attackSlider.value = DEFAULTS.attack;
