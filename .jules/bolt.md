@@ -13,3 +13,6 @@
 ## 2025-03-05 - Frontend Watchwords Regex Caching
 **Learning:** In the vanilla JS frontend, avoid repetitive object creation like `new RegExp()` and string transformations like `.toLowerCase()` inside UI rendering hot paths. Testing string matches for multiple watchwords patterns rapidly compounds.
 **Action:** Pre-compile regular expressions and cache globally whenever their source configuration changes. Combine multiple words into a single regex `(word1|word2)`, sorting by length descending to match longer words first. When caching global regular expressions, ensure `lastIndex = 0` is manually reset before subsequent uses to prevent stateful matching bugs.
+## 2025-03-05 - Avoid O(N) Equality Checks on Config Dicts in Hot Loops
+**Learning:** Using `!=` on dynamically loaded configuration dictionaries (like `corrections`) inside hot paths such as `transcribe_chunk` performs an O(N) comparison, which degrades performance as the dictionary size grows.
+**Action:** Caching these config objects using the `is not` operator allows for an O(1) global reference check, avoiding performance bottlenecks while retaining cache invalidation correctness.
