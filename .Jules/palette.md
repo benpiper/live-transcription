@@ -20,3 +20,6 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+## 2024-05-24 - Replace Thread-Blocking Alerts
+**Learning:** Using native thread-blocking `alert()` dialogs in a live transcription environment disrupts the real-time audio processing feed, breaking the primary functionality of the app.
+**Action:** Always use non-blocking UI notification systems (like the globally available `showSystemAlert`) instead of native `alert()` when error handling or notifying users in real-time streaming contexts.
