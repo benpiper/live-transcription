@@ -20,3 +20,7 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+
+## $(date +%Y-%m-%d) - [Replaced Blocking Native Alerts with showSystemAlert in Live UI]
+**Learning:** Using native thread-blocking `alert()` dialogs in real-time feeds causes the UI and JavaScript execution to freeze, missing live transcriptions.
+**Action:** Always prefer non-blocking system alert components like `showSystemAlert(level, message, detail)` to present errors and warnings without disrupting background activities.
