@@ -20,3 +20,6 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+## 2026-07-06 - [Empty States and Action Disabling]
+**Learning:** Users can be confused when lists are empty and actions like "Clear All" are still clickable but do nothing. Empty lists without a helpful message look broken or unfinished.
+**Action:** Always provide a helpful empty state message for lists, guiding the user on how to populate it. Additionally, disable related actions (like "Clear All") when the list is empty to prevent user confusion, updating `disabled`, `title`, and `aria-disabled` attributes appropriately.
