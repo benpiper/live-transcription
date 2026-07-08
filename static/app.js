@@ -765,28 +765,12 @@ function addTranscriptItem(data, fromSession = false) {
             processTimeStat.classList.remove('slow-processing');
         }
 
-        const segmentStart = data.origin_time - 0.5;
-        const segmentEnd = Date.now() / 1000;
-        const segmentChunks = rawAudioHistory
-            .filter(ah => ah.timestamp >= segmentStart && ah.timestamp <= segmentEnd)
-            .map(ah => ah.chunk);
+        // Audio is stored in backend buffer, fetched on demand via API
+        // Set ID to enable playback/download buttons
+        item.dataset.id = historyItem.id;
 
-        if (segmentChunks.length > 0) {
-            const totalLength = segmentChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-            const combinedAudio = new Float32Array(totalLength);
-            let offset = 0;
-            for (const chunk of segmentChunks) {
-                combinedAudio.set(chunk, offset);
-                offset += chunk.length;
-            }
-
-            // Don't keep audio in historyItem to save RAM
-            // Audio is stored in backend buffer, fetched on demand via API
-            // historyItem.audio remains null
-            item.dataset.id = historyItem.id;
-
-            pruneHistory();
-        }
+        // Prune history to keep memory usage in check
+        pruneHistory();
     }
 
     const itemSpeaker = data.speaker || 'Unknown';
