@@ -34,6 +34,8 @@ class AlertRule:
 
     # Compiled regex (lazy-initialized)
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+    _compiled_word_regexes: Optional[List[re.Pattern]] = field(default=None, init=False, repr=False)
+    _lowercase_keywords: Optional[List[str]] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         """Validate and compile regex if needed."""
@@ -45,6 +47,17 @@ class AlertRule:
                 self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+        elif self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            self._compiled_word_regexes = []
+            for kw in keywords:
+                try:
+                    self._compiled_word_regexes.append(re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE))
+                except re.error as e:
+                    raise ValueError(f"Invalid word pattern in rule '{self.id}': {e}")
+        elif self.match_type == "substring":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            self._lowercase_keywords = [kw.lower() for kw in keywords]
 
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
@@ -54,6 +67,18 @@ class AlertRule:
             except re.error:
                 return None
         return self._compiled_regex
+
+    def get_compiled_word_regexes(self) -> List[re.Pattern]:
+        """Get compiled word regexes, compiling if needed."""
+        if self._compiled_word_regexes is None and self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            self._compiled_word_regexes = []
+            for kw in keywords:
+                try:
+                    self._compiled_word_regexes.append(re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE))
+                except re.error:
+                    pass
+        return self._compiled_word_regexes or []
 
     def matches(
         self,
@@ -90,15 +115,17 @@ class AlertRule:
         # Check text pattern
         matched_text = None
         if self.match_type == "substring":
-            if any(kw.lower() in text.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)):
+            text_lower = text.lower()
+            # Use pre-lowered keywords if available, fallback to lowering them
+            keywords = self._lowercase_keywords if self._lowercase_keywords is not None else [kw.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)]
+            if any(kw in text_lower for kw in keywords):
                 matched_text = text
 
         elif self.match_type == "word":
             # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
+            # Uses pre-compiled regexes for performance
+            for regex in self.get_compiled_word_regexes():
+                if regex.search(text):
                     matched_text = text
                     break
 
