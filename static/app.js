@@ -1354,7 +1354,24 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="text-muted" style="padding: 8px 0; text-align: center; font-size: 0.9em; width: 100%;">No watchwords added</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = "No watchwords to clear";
+            clearBtn.removeAttribute('aria-disabled');
+        }
+        return;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.title = "Clear all watchwords";
+        clearBtn.removeAttribute('aria-disabled');
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1778,8 +1795,8 @@ const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
     updateWatchwordsCache();
-    renderWatchwords();
 }
+renderWatchwords();
 
 updateNotificationButton();
 
