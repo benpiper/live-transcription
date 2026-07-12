@@ -902,7 +902,46 @@ function drawVisualizer() {
 
 function renderSpeakerFilters() {
     const filterContainer = document.getElementById('speaker-filters');
+    const resetBtn = document.getElementById('reset-filters');
+    const selectAllBtn = document.getElementById('select-all-speakers');
+    const deselectAllBtn = document.getElementById('deselect-all-speakers');
     if (!filterContainer) return;
+
+    if (speakers.size === 0) {
+        if (!document.getElementById('empty-speaker-msg')) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.id = 'empty-speaker-msg';
+            emptyMsg.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9em; padding: 8px; text-align: center; font-style: italic;">No speakers identified yet</div>';
+            filterContainer.appendChild(emptyMsg);
+        }
+        if (resetBtn) {
+            resetBtn.disabled = true;
+            resetBtn.title = 'No speakers to filter';
+        }
+        if (selectAllBtn) {
+            selectAllBtn.disabled = true;
+            selectAllBtn.title = 'No speakers to select';
+        }
+        if (deselectAllBtn) {
+            deselectAllBtn.disabled = true;
+            deselectAllBtn.title = 'No speakers to deselect';
+        }
+    } else {
+        const emptyMsg = document.getElementById('empty-speaker-msg');
+        if (emptyMsg) emptyMsg.remove();
+        if (resetBtn) {
+            resetBtn.disabled = false;
+            resetBtn.title = 'Clear speaker filters';
+        }
+        if (selectAllBtn) {
+            selectAllBtn.disabled = false;
+            selectAllBtn.title = 'Select all speakers';
+        }
+        if (deselectAllBtn) {
+            deselectAllBtn.disabled = false;
+            deselectAllBtn.title = 'Deselect all speakers';
+        }
+    }
 
     // Get current speakers in the list
     const currentItems = Array.from(filterContainer.querySelectorAll('.dropdown-item')).map(
@@ -1354,7 +1393,22 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9em; padding: 8px 0; text-align: center; font-style: italic;">No watchwords added yet</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = 'No watchwords to clear';
+        }
+        return;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.title = 'Clear all watchwords';
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
