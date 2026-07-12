@@ -13,3 +13,6 @@
 ## 2025-03-05 - Frontend Watchwords Regex Caching
 **Learning:** In the vanilla JS frontend, avoid repetitive object creation like `new RegExp()` and string transformations like `.toLowerCase()` inside UI rendering hot paths. Testing string matches for multiple watchwords patterns rapidly compounds.
 **Action:** Pre-compile regular expressions and cache globally whenever their source configuration changes. Combine multiple words into a single regex `(word1|word2)`, sorting by length descending to match longer words first. When caching global regular expressions, ensure `lastIndex = 0` is manually reset before subsequent uses to prevent stateful matching bugs.
+## 2025-03-05 - Avoid Missing Lazy Evaluation on Object Updates
+**Learning:** When moving regular expression compilation from a hot loop directly to a `__post_init__` block that bails out early if `enabled=False`, re-enabling the object dynamically later will result in uninitialized (null) patterns and match failures.
+**Action:** When adding pre-compilation steps during initialization of an object that supports dynamic runtime toggling, ensure lazy initialization mechanisms exist in the methods that consume the pre-compiled values.
