@@ -909,6 +909,16 @@ function renderSpeakerFilters() {
         item => item.dataset.speaker
     );
 
+    const hasSpeakers = (speakers.size !== undefined) ? speakers.size > 0 : speakers.length > 0;
+
+    if (!hasSpeakers) {
+        filterContainer.innerHTML = '<div class="placeholder" style="padding: 8px;">No speakers detected</div>';
+        return;
+    } else {
+        const placeholder = filterContainer.querySelector('.placeholder');
+        if (placeholder) placeholder.remove();
+    }
+
     speakers.forEach(speaker => {
         if (!currentItems.includes(speaker)) {
             const item = document.createElement('label');
@@ -1356,20 +1366,34 @@ function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
     list.innerHTML = '';
 
+    const clearBtn = document.getElementById('clear-watchwords');
+
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-    sortedWatchwords.forEach((word) => {
-        // Find original index for removal
-        const originalIndex = watchwords.indexOf(word);
-        const tag = document.createElement('div');
-        tag.className = 'tag';
-        tag.innerHTML = `
-            ${escapeHtml(word)}
-            <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
-        `;
-        list.appendChild(tag);
-    });
+    if (sortedWatchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = 'No watchwords to clear';
+        }
+    } else {
+        if (clearBtn) {
+            clearBtn.disabled = false;
+            clearBtn.title = '';
+        }
+        sortedWatchwords.forEach((word) => {
+            // Find original index for removal
+            const originalIndex = watchwords.indexOf(word);
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.innerHTML = `
+                ${escapeHtml(word)}
+                <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
+            `;
+            list.appendChild(tag);
+        });
+    }
 }
 
 function addWatchword() {
@@ -1967,3 +1991,9 @@ if (scrollLockBtn) {
     // Initialize
     loadSettings();
 })();
+
+// Render initial empty states
+document.addEventListener('DOMContentLoaded', () => {
+    renderWatchwords();
+    renderSpeakerFilters();
+});
