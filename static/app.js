@@ -702,7 +702,7 @@ function createTranscriptElement(data, fromSession = false) {
                   title="Click to filter by this speaker">${escapedSpeaker}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
-                <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
+                <span class="timestamp">${escapeHtml(data.timestamp)}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
                     ${hasAudio && item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio" aria-label="Play audio segment"><span aria-hidden="true">▶️</span></button>` : ''}
                     ${hasAudio && item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip" aria-label="Download audio clip"><span aria-hidden="true">📥</span></button>` : ''}
@@ -822,7 +822,7 @@ function addTranscriptItem(data, fromSession = false) {
                   title="Click to filter by this speaker">${escapedSpeaker}</span>
             <div class="timestamp-wrapper">
                 <span class="confidence ${confClass}" title="Whisper Log Probability (closer to 0 is better)">${confidence.toFixed(2)}</span>
-                <span class="timestamp">${data.timestamp}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
+                <span class="timestamp">${escapeHtml(data.timestamp)}${data.duration ? ` (${data.duration.toFixed(1)}s)` : ''}</span>
                 <div class="action-buttons">
                     ${item.dataset.id ? `<button class="play-btn" onclick="playSegment('${item.dataset.id}')" title="Play audio" aria-label="Play audio segment"><span aria-hidden="true">▶️</span></button>` : ''}
                     ${item.dataset.id ? `<button class="download-btn" onclick="downloadSegment('${item.dataset.id}')" title="Download clip" aria-label="Download audio clip"><span aria-hidden="true">📥</span></button>` : ''}
