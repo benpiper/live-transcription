@@ -1356,6 +1356,21 @@ function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
     list.innerHTML = '';
 
+    const clearBtn = document.getElementById('clear-watchwords');
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added.</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = 'No watchwords to clear';
+        }
+        return;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.title = 'Clear all watchwords';
+    }
+
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
@@ -1778,6 +1793,8 @@ const savedWatchwords = localStorage.getItem('watchwords');
 if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
     updateWatchwordsCache();
+    renderWatchwords();
+} else {
     renderWatchwords();
 }
 
