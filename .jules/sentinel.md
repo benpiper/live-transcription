@@ -17,3 +17,8 @@
 **Vulnerability:** The sanitization functions (`escapeHtml`, `escapeJs`) previously used a `typeof !== 'string'` check that returned the unescaped input. Malicious array or object payloads could bypass this check and be executed upon implicit string conversion in the DOM.
 **Learning:** Type checks that simply return the original non-string input are insufficient because arrays/objects are implicitly cast to strings when rendered, bypassing the filter.
 **Prevention:** Always check for null values explicitly and cast inputs to strings (e.g., `String(unsafe)`) before applying escaping logic to prevent type confusion vulnerabilities.
+## 2024-05-18 - Fix XSS in transcript feed
+
+**Vulnerability:** XSS vulnerability found in `static/app.js` because `data.timestamp` from the backend was injected directly into the DOM using `innerHTML` without sanitization.
+**Learning:** `data.timestamp` can contain arbitrary payloads (e.g., from mocked backends or malicious injections) which bypass standard XSS protections if not sanitized. The vanilla JS frontend inserts user-controlled data via `innerHTML`, creating a DOM-based XSS risk.
+**Prevention:** All user-controlled data, including seemingly benign fields like timestamps, must be explicitly sanitized using the provided `escapeHtml` function before being injected into HTML via `innerHTML`.
