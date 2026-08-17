@@ -32,19 +32,32 @@ class AlertRule:
     description: str = ""                     # Human-readable description
     enabled: bool = True                      # Whether rule is active
 
-    # Compiled regex (lazy-initialized)
+    # Pre-compiled patterns for performance
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+    _word_regexes: List[re.Pattern] = field(default_factory=list, init=False, repr=False)
+    _substring_lowers: List[str] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self):
-        """Validate and compile regex if needed."""
-        if not self.enabled:
-            return
+        """Validate and pre-compile patterns for performance."""
+        # Note: Do not early return if not enabled, otherwise if enabled later it will crash
+        # due to missing compiled properties (Codebase-specific performance convention)
+
+        keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
 
         if self.match_type == "regex" and isinstance(self.pattern, str):
             try:
                 self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+
+        elif self.match_type == "word":
+            self._word_regexes = [
+                re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)
+                for kw in keywords
+            ]
+
+        elif self.match_type == "substring":
+            self._substring_lowers = [kw.lower() for kw in keywords]
 
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
@@ -90,17 +103,14 @@ class AlertRule:
         # Check text pattern
         matched_text = None
         if self.match_type == "substring":
-            if any(kw.lower() in text.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)):
+            text_lower = text.lower()
+            if any(kw in text_lower for kw in self._substring_lowers):
                 matched_text = text
 
         elif self.match_type == "word":
-            # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
-                    matched_text = text
-                    break
+            # Word boundary matching using pre-compiled regexes
+            if any(pattern.search(text) for pattern in self._word_regexes):
+                matched_text = text
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
