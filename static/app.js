@@ -928,9 +928,6 @@ function renderSpeakerFilters() {
         }
     }
 
-    const currentItems = Array.from(filterContainer.querySelectorAll('.dropdown-item')).map(
-        item => item.dataset.speaker
-    );
 
     speakers.forEach(speaker => {
         if (!currentItems.includes(speaker)) {
