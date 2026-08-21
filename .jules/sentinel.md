@@ -17,3 +17,8 @@
 **Vulnerability:** The sanitization functions (`escapeHtml`, `escapeJs`) previously used a `typeof !== 'string'` check that returned the unescaped input. Malicious array or object payloads could bypass this check and be executed upon implicit string conversion in the DOM.
 **Learning:** Type checks that simply return the original non-string input are insufficient because arrays/objects are implicitly cast to strings when rendered, bypassing the filter.
 **Prevention:** Always check for null values explicitly and cast inputs to strings (e.g., `String(unsafe)`) before applying escaping logic to prevent type confusion vulnerabilities.
+
+## 2025-03-05 - [Insecure Default SSL Configuration]
+**Vulnerability:** The email alert system globally disabled TLS certificate hostname verification (`ssl_context.check_hostname = False`) by default, exposing the system to Man-in-the-Middle (MitM) attacks.
+**Learning:** Even internal tool scripts must default to secure TLS verification when connecting to WebSockets or HTTP endpoints. Disabling verification should always be an explicit, opt-in configuration.
+**Prevention:** Default to secure SSL configurations (`ssl.create_default_context()`) and only disable hostname checking if a specific config flag (like `insecure_skip_verify: true`) is explicitly set by the user.
