@@ -902,9 +902,32 @@ function drawVisualizer() {
 
 function renderSpeakerFilters() {
     const filterContainer = document.getElementById('speaker-filters');
+    const resetBtn = document.getElementById('reset-filters');
     if (!filterContainer) return;
 
     // Get current speakers in the list
+    const currentItems = Array.from(filterContainer.querySelectorAll('.dropdown-item')).map(
+        item => item.dataset.speaker
+    );
+
+    if (speakers.size === 0) {
+        // Clear old items explicitly before showing placeholder
+        filterContainer.innerHTML = '<div class="placeholder" style="padding: 12px; font-size: 0.9em;">No speakers detected yet</div>';
+        if (resetBtn) {
+            resetBtn.disabled = true;
+            resetBtn.title = "No speakers to clear";
+        }
+    } else {
+        const placeholder = filterContainer.querySelector('.placeholder');
+        if (placeholder) {
+            placeholder.remove();
+        }
+        if (resetBtn) {
+            resetBtn.disabled = false;
+            resetBtn.title = "Clear speaker filters";
+        }
+    }
+
     const currentItems = Array.from(filterContainer.querySelectorAll('.dropdown-item')).map(
         item => item.dataset.speaker
     );
@@ -1354,7 +1377,21 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder" style="padding: 12px 0;">No watchwords added</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = "No watchwords to clear";
+        }
+    } else {
+        if (clearBtn) {
+            clearBtn.disabled = false;
+            clearBtn.title = "Clear all watchwords";
+        }
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
