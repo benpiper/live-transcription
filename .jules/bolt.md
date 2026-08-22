@@ -13,3 +13,6 @@
 ## 2025-03-05 - Frontend Watchwords Regex Caching
 **Learning:** In the vanilla JS frontend, avoid repetitive object creation like `new RegExp()` and string transformations like `.toLowerCase()` inside UI rendering hot paths. Testing string matches for multiple watchwords patterns rapidly compounds.
 **Action:** Pre-compile regular expressions and cache globally whenever their source configuration changes. Combine multiple words into a single regex `(word1|word2)`, sorting by length descending to match longer words first. When caching global regular expressions, ensure `lastIndex = 0` is manually reset before subsequent uses to prevent stateful matching bugs.
+## 2025-03-05 - Compiled Regex vs List Comprehensions for Substring Matching
+**Learning:** Using `any(v in w for v in vocab_lower)` in a loop creates significant overhead by repeatedly iterating through lists for substring checks, causing measurable iteration latency during segment processing.
+**Action:** Pre-compile a single regex pattern combining all strings via `(v1|v2)` sorted by length descending, and use `.search()` instead. Combine this with reference-checking caching (e.g. `vocabulary != _last_vocab_ref`) to avoid recompilation costs, turning O(N*M) checks into a fast C-optimized regex scan.
