@@ -54,6 +54,10 @@ _COMPILED_HALLUCINATION_PATTERNS = [
 _last_corrections_ref = None
 _compiled_corrections = []
 
+# Cache for compiled vocabulary patterns
+_last_vocab_ref = None
+_compiled_vocab_pattern = None
+
 
 # Device state tracking
 _active_device = None        # 'cuda' or 'cpu' - what we're currently running on
@@ -505,9 +509,17 @@ def transcribe_chunk(
         ]
         _last_corrections_ref = corrections
 
-    # Pre-calculate lowercase vocabulary once per chunk, instead of per segment
-    vocab_lower = [v.lower() for v in vocabulary] if vocabulary else []
-    
+    # Update vocabulary regex cache if needed
+    global _last_vocab_ref, _compiled_vocab_pattern
+    if vocabulary != _last_vocab_ref:
+        if vocabulary:
+            # Sort by length descending to match longest words first
+            sorted_vocab = sorted([v.lower() for v in vocabulary], key=len, reverse=True)
+            _compiled_vocab_pattern = re.compile("|".join(re.escape(v) for v in sorted_vocab))
+        else:
+            _compiled_vocab_pattern = None
+        _last_vocab_ref = vocabulary
+
     for segment in segments:
         text_segment = segment.text.strip()
         
@@ -524,9 +536,9 @@ def transcribe_chunk(
             continue
             
         # Enhanced Confidence Filtering: Reject vocab-heavy segments with marginal confidence
-        if vocabulary:
+        if vocabulary and _compiled_vocab_pattern:
             words = text_segment.lower().split()
-            vocab_hits = [w for w in words if any(v in w for v in vocab_lower)]
+            vocab_hits = [w for w in words if _compiled_vocab_pattern.search(w)]
             
             # If segment is >50% vocabulary words, require even higher confidence
             if len(words) > 0 and (len(vocab_hits) / len(words)) > 0.5:
