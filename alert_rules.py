@@ -45,14 +45,39 @@ class AlertRule:
                 self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+        elif self.match_type == "word":
+            # PERFORMANCE: Pre-compile word boundary keyword matches into a single, combined
+            # regex using OR syntax `\b(kw1|kw2)\b`. Avoid rebuilding and evaluating regular
+            # expressions in a tight loop during transcript evaluation. Sort by length
+            # descending to match longer words first (e.g. 'firearm' vs 'fire').
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            sorted_kws = sorted(keywords, key=len, reverse=True)
+            pattern_str = r"\b(" + "|".join(re.escape(kw) for kw in sorted_kws) + r")\b"
+            try:
+                self._compiled_regex = re.compile(pattern_str, re.IGNORECASE)
+            except re.error as e:
+                raise ValueError(f"Invalid word pattern in rule '{self.id}': {e}")
 
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
-        if self._compiled_regex is None and self.match_type == "regex" and isinstance(self.pattern, str):
-            try:
-                self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
-            except re.error:
-                return None
+        if self._compiled_regex is None:
+            if self.match_type == "regex" and isinstance(self.pattern, str):
+                try:
+                    self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
+                except re.error:
+                    return None
+            elif self.match_type == "word":
+                # PERFORMANCE: Pre-compile word boundary keyword matches into a single, combined
+                # regex using OR syntax `\b(kw1|kw2)\b`. Avoid rebuilding and evaluating regular
+                # expressions in a tight loop during transcript evaluation. Sort by length
+                # descending to match longer words first (e.g. 'firearm' vs 'fire').
+                keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+                sorted_kws = sorted(keywords, key=len, reverse=True)
+                pattern_str = r"\b(" + "|".join(re.escape(kw) for kw in sorted_kws) + r")\b"
+                try:
+                    self._compiled_regex = re.compile(pattern_str, re.IGNORECASE)
+                except re.error:
+                    return None
         return self._compiled_regex
 
     def matches(
@@ -95,12 +120,9 @@ class AlertRule:
 
         elif self.match_type == "word":
             # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
-                    matched_text = text
-                    break
+            regex = self.get_compiled_regex()
+            if regex and regex.search(text):
+                matched_text = text
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
