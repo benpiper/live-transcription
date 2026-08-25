@@ -46,6 +46,19 @@ class AlertRule:
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
 
+        if self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            sorted_keywords = sorted(keywords, key=len, reverse=True)
+            combined_pattern = r"\b(" + "|".join(re.escape(kw) for kw in sorted_keywords) + r")\b"
+            try:
+                self._compiled_regex = re.compile(combined_pattern, re.IGNORECASE)
+            except re.error as e:
+                raise ValueError(f"Invalid word pattern in rule '{self.id}': {e}")
+
+        if self.match_type == "substring":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            self._lower_keywords = [kw.lower() for kw in keywords]
+
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
         if self._compiled_regex is None and self.match_type == "regex" and isinstance(self.pattern, str):
@@ -90,17 +103,14 @@ class AlertRule:
         # Check text pattern
         matched_text = None
         if self.match_type == "substring":
-            if any(kw.lower() in text.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)):
+            text_lower = text.lower()
+            if any(kw in text_lower for kw in self._lower_keywords):
                 matched_text = text
 
         elif self.match_type == "word":
             # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
-                    matched_text = text
-                    break
+            if self._compiled_regex and self._compiled_regex.search(text):
+                matched_text = text
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
