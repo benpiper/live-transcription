@@ -17,3 +17,8 @@
 **Vulnerability:** The sanitization functions (`escapeHtml`, `escapeJs`) previously used a `typeof !== 'string'` check that returned the unescaped input. Malicious array or object payloads could bypass this check and be executed upon implicit string conversion in the DOM.
 **Learning:** Type checks that simply return the original non-string input are insufficient because arrays/objects are implicitly cast to strings when rendered, bypassing the filter.
 **Prevention:** Always check for null values explicitly and cast inputs to strings (e.g., `String(unsafe)`) before applying escaping logic to prevent type confusion vulnerabilities.
+
+## 2024-05-04 - [Insecure Default SSL Configuration]
+**Vulnerability:** The email alert worker (`email_alert.py`) disabled SSL certificate verification globally by default for all HTTP and WebSocket connections to the primary server by hardcoding `ssl_context.check_hostname = False` and `ssl_context.verify_mode = ssl.CERT_NONE`.
+**Learning:** Disabling SSL verification by default exposes the system to Man-in-the-Middle (MitM) attacks. Security configurations should be secure by default, requiring explicit opt-in for insecure modes (e.g., for local self-signed certificates during development).
+**Prevention:** Always default to secure configurations (`ssl.create_default_context()`). Expose an explicit configuration flag (like `insecure_skip_verify`) to allow users to knowingly bypass verification if necessary, but never make it the default behavior.
