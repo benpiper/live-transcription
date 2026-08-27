@@ -34,17 +34,22 @@ class AlertRule:
 
     # Compiled regex (lazy-initialized)
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+    # Pre-compiled word regex cache
+    _compiled_word_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         """Validate and compile regex if needed."""
-        if not self.enabled:
-            return
-
         if self.match_type == "regex" and isinstance(self.pattern, str):
             try:
                 self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
             except re.error as e:
-                raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+                if self.enabled:
+                    raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+        elif self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            keywords = sorted(keywords, key=len, reverse=True)
+            pattern = r"\b(" + "|".join(re.escape(kw) for kw in keywords) + r")\b"
+            self._compiled_word_regex = re.compile(pattern, re.IGNORECASE)
 
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
@@ -94,13 +99,8 @@ class AlertRule:
                 matched_text = text
 
         elif self.match_type == "word":
-            # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
-                    matched_text = text
-                    break
+            if self._compiled_word_regex and self._compiled_word_regex.search(text):
+                matched_text = text
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
