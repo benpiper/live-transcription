@@ -20,3 +20,6 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+## 2026-08-27 - [Watchword Empty State]
+**Learning:** Adding a visual empty state for dynamic lists like watchwords and disabling the 'Clear All' button (with explanatory tooltips) provides clearer guidance and prevents users from attempting bulk actions when there's nothing to clear.
+**Action:** Always provide visual placeholders for empty lists and disable related bulk-action buttons with `title` tooltips instead of just relying on empty spaces.

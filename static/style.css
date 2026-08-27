@@ -781,6 +781,7 @@ canvas {
     align-items: center;
     color: var(--text-muted);
     font-style: italic;
+    padding: 12px 0;
 }
 
 .watchword-section .section-header {
