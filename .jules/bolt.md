@@ -13,3 +13,6 @@
 ## 2025-03-05 - Frontend Watchwords Regex Caching
 **Learning:** In the vanilla JS frontend, avoid repetitive object creation like `new RegExp()` and string transformations like `.toLowerCase()` inside UI rendering hot paths. Testing string matches for multiple watchwords patterns rapidly compounds.
 **Action:** Pre-compile regular expressions and cache globally whenever their source configuration changes. Combine multiple words into a single regex `(word1|word2)`, sorting by length descending to match longer words first. When caching global regular expressions, ensure `lastIndex = 0` is manually reset before subsequent uses to prevent stateful matching bugs.
+## 2026-08-29 - Pre-compile Regexes and Lowercase Strings
+**Learning:** Pre-compiling combined regular expressions (`r"\b(kw1|kw2)\b"`) and pre-lowercasing matching substrings during object initialization (`__post_init__`) prevents repetitive compilation and string conversion overhead in hot loops (like `AlertRule.matches()`).
+**Action:** Always shift invariant computations (like regex compilation and keyword casing) out of hot matching loops and into one-time initialization blocks, caching the results in instance properties.
