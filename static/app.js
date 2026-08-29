@@ -1354,7 +1354,25 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'placeholder';
+        placeholder.textContent = 'No watchwords added yet.';
+        list.appendChild(placeholder);
+
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = 'No watchwords to clear';
+        }
+    } else {
+        if (clearBtn) {
+            clearBtn.disabled = false;
+            clearBtn.title = 'Clear all watchwords';
+        }
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
