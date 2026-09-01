@@ -54,6 +54,10 @@ _COMPILED_HALLUCINATION_PATTERNS = [
 _last_corrections_ref = None
 _compiled_corrections = []
 
+# Global cache for lowercase vocabulary
+_last_vocab_ref = None
+_vocab_lower_cache = []
+
 
 # Device state tracking
 _active_device = None        # 'cuda' or 'cpu' - what we're currently running on
@@ -505,8 +509,12 @@ def transcribe_chunk(
         ]
         _last_corrections_ref = corrections
 
-    # Pre-calculate lowercase vocabulary once per chunk, instead of per segment
-    vocab_lower = [v.lower() for v in vocabulary] if vocabulary else []
+    # Fetch pre-calculated lowercase vocabulary (using dictionary equality check for O(1) cache validation)
+    global _last_vocab_ref, _vocab_lower_cache
+    if vocabulary != _last_vocab_ref:
+        _vocab_lower_cache = [v.lower() for v in vocabulary] if vocabulary else []
+        _last_vocab_ref = vocabulary
+    vocab_lower = _vocab_lower_cache
     
     for segment in segments:
         text_segment = segment.text.strip()
