@@ -35,8 +35,25 @@ class AlertRule:
     # Compiled regex (lazy-initialized)
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
+    # Pre-compiled patterns for performance
+    _compiled_word_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+    _lower_substrings: Optional[List[str]] = field(default=None, init=False, repr=False)
+
     def __post_init__(self):
         """Validate and compile regex if needed."""
+        # Pre-compute word regex
+        if self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            # Sort by length descending to match longer words first
+            sorted_kws = sorted(keywords, key=len, reverse=True)
+            escaped_kws = [re.escape(kw) for kw in sorted_kws]
+            self._compiled_word_regex = re.compile(r"\b(?:(" + "|".join(escaped_kws) + r"))\b", re.IGNORECASE)
+
+        # Pre-compute lowercase substrings
+        elif self.match_type == "substring":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            self._lower_substrings = [kw.lower() for kw in keywords]
+
         if not self.enabled:
             return
 
@@ -90,17 +107,16 @@ class AlertRule:
         # Check text pattern
         matched_text = None
         if self.match_type == "substring":
-            if any(kw.lower() in text.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)):
+            text_lower = text.lower()
+            if self._lower_substrings and any(kw in text_lower for kw in self._lower_substrings):
                 matched_text = text
 
         elif self.match_type == "word":
-            # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
+            if self._compiled_word_regex:
+                match = self._compiled_word_regex.search(text)
+                if match:
+                    # Provide matched text to match existing behavior
                     matched_text = text
-                    break
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
