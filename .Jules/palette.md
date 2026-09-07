@@ -20,3 +20,6 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+## 2026-05-26 - [Empty States for Settings Resets]
+**Learning:** Found that the "Reset" button for audio processing remained active even when the settings were already at their default values. Providing a disabled state for these actions removes ambiguity and clearly signals to the user that they are in the baseline configuration.
+**Action:** When working on "Reset" or "Clear" controls, disable them when their corresponding data/settings match the default or empty states, and provide a `title` explaining why it's disabled.

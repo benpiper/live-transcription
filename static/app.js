@@ -1053,6 +1053,9 @@ document.getElementById('deselect-all-speakers').addEventListener('click', () =>
 
 // Reset/Clear button
 document.getElementById('reset-filters').addEventListener('click', () => {
+    if (selectedSpeakers.size > 0) {
+        if (!confirm("Are you sure you want to clear all speaker filters?")) return;
+    }
     selectedSpeakers.clear();
     document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
         cb.checked = true;
@@ -1354,7 +1357,22 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = "No watchwords to clear";
+        }
+        return;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.title = "Clear all watchwords";
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1886,12 +1904,30 @@ if (scrollLockBtn) {
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
     }
 
+    function updateResetButtonState() {
+        const isDefault = parseFloat(thresholdSlider.value) === DEFAULTS.threshold &&
+            parseFloat(ratioSlider.value) === DEFAULTS.ratio &&
+            parseFloat(attackSlider.value) === DEFAULTS.attack &&
+            parseFloat(releaseSlider.value) === DEFAULTS.release &&
+            parseFloat(gainSlider.value) === DEFAULTS.gain &&
+            enabledCheckbox.checked === DEFAULTS.enabled;
+
+        if (isDefault) {
+            resetBtn.disabled = true;
+            resetBtn.title = "Settings are already at defaults";
+        } else {
+            resetBtn.disabled = false;
+            resetBtn.title = "Reset to default settings";
+        }
+    }
+
     function updateDisplayValues() {
         thresholdVal.textContent = `${thresholdSlider.value} dB`;
         ratioVal.textContent = `${ratioSlider.value}:1`;
         attackVal.textContent = `${attackSlider.value} ms`;
         releaseVal.textContent = `${releaseSlider.value} ms`;
         gainVal.textContent = `${parseFloat(gainSlider.value).toFixed(1)}×`;
+        updateResetButtonState();
     }
 
     function applyToNodes() {
