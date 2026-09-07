@@ -6,16 +6,25 @@
         "username": "your-email@gmail.com",
         "password": "your-app-password",
         "from_address": "Alert Bot <your-email@gmail.com>",
-        "to_addresses": ["target-email@example.com"]
+        "to_addresses": [
+            "target-email@example.com"
+        ]
     },
     "alerts": {
         "rules": [
             {
                 "id": "fire-emergency",
-                "pattern": ["fire", "burning", "structure fire"],
+                "pattern": [
+                    "fire",
+                    "burning",
+                    "structure fire"
+                ],
                 "match_type": "word",
                 "description": "Fire emergency detected",
-                "tags": ["emergency", "fire"],
+                "tags": [
+                    "emergency",
+                    "fire"
+                ],
                 "dedup_cooldown_sec": 60,
                 "enabled": false
             },
@@ -24,16 +33,24 @@
                 "pattern": "\\b(Main|Oak|Elm|Grove|Spring)\\s+(?:St|Street|Ave|Road|Ln|Lane)\\b",
                 "match_type": "regex",
                 "description": "Dispatch location match",
-                "tags": ["location"],
+                "tags": [
+                    "location"
+                ],
                 "dedup_cooldown_sec": 300,
                 "enabled": true
             },
             {
                 "id": "generic-keywords",
-                "pattern": ["ambulance", "emergency", "police"],
+                "pattern": [
+                    "ambulance",
+                    "emergency",
+                    "police"
+                ],
                 "match_type": "substring",
                 "description": "Generic emergency keywords",
-                "tags": ["general"],
+                "tags": [
+                    "general"
+                ],
                 "dedup_cooldown_sec": 120,
                 "enabled": true
             }
@@ -43,7 +60,8 @@
         "attach_audio": true
     },
     "websocket": {
-        "url": "ws://localhost:8000/ws"
+        "url": "ws://localhost:8000/ws",
+        "insecure_skip_verify": false
     },
     "heartbeat": {
         "enabled": true,
