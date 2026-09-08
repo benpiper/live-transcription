@@ -13,3 +13,6 @@
 ## 2025-03-05 - Frontend Watchwords Regex Caching
 **Learning:** In the vanilla JS frontend, avoid repetitive object creation like `new RegExp()` and string transformations like `.toLowerCase()` inside UI rendering hot paths. Testing string matches for multiple watchwords patterns rapidly compounds.
 **Action:** Pre-compile regular expressions and cache globally whenever their source configuration changes. Combine multiple words into a single regex `(word1|word2)`, sorting by length descending to match longer words first. When caching global regular expressions, ensure `lastIndex = 0` is manually reset before subsequent uses to prevent stateful matching bugs.
+## $(date +%Y-%m-%d) - Pre-compile AlertRule Regexes
+**Learning:** In Python, dynamic regex strings created from an empty list (e.g. `r'\b(?:' + '|'.join([]) + r')\b'`) evaluate to `r'\b(?:)\b'`, which incorrectly matches empty strings at every word boundary resulting in false positive matches.
+**Action:** Always wrap dynamic combined regex compilation with an `if keywords:` check.

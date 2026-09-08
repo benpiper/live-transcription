@@ -35,16 +35,33 @@ class AlertRule:
     # Compiled regex (lazy-initialized)
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
+    _compiled_word_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+    _lower_keywords: List[str] = field(default_factory=list, init=False, repr=False)
+
     def __post_init__(self):
         """Validate and compile regex if needed."""
-        if not self.enabled:
-            return
-
-        if self.match_type == "regex" and isinstance(self.pattern, str):
+        if self.match_type == "substring":
+            # ⚡ Bolt Optimization: Pre-compute lowercase keywords to avoid O(n) `.lower()` calls inside matches()
+            self._lower_keywords = [
+                kw.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)
+            ]
+        elif self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            if keywords:
+                # ⚡ Bolt Optimization: Pre-compile a single regex to prevent redundant instantiations in matches()
+                # Sort descending by length to prevent partial shadowing (e.g. "fire" matching before "firearm")
+                sorted_kws = sorted(keywords, key=len, reverse=True)
+                escaped_kws = [re.escape(kw) for kw in sorted_kws]
+                pattern_str = r"\b(?:" + "|".join(escaped_kws) + r")\b"
+                self._compiled_word_regex = re.compile(pattern_str, re.IGNORECASE)
+            else:
+                self._compiled_word_regex = None
+        elif self.match_type == "regex" and isinstance(self.pattern, str):
             try:
                 self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
             except re.error as e:
-                raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+                if self.enabled:
+                    raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
 
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
@@ -90,17 +107,14 @@ class AlertRule:
         # Check text pattern
         matched_text = None
         if self.match_type == "substring":
-            if any(kw.lower() in text.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)):
+            text_lower = text.lower()
+            if any(kw in text_lower for kw in self._lower_keywords):
                 matched_text = text
 
         elif self.match_type == "word":
             # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
-                    matched_text = text
-                    break
+            if self._compiled_word_regex and self._compiled_word_regex.search(text):
+                matched_text = text
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
