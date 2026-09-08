@@ -955,12 +955,19 @@ function toggleSpeaker(speaker, checked) {
 function applyMultiSpeakerFilter() {
     // Update dropdown label
     const label = document.getElementById('speaker-filter-label');
+    const resetBtn = document.getElementById('reset-filters');
     if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
         label.textContent = 'All Speakers';
+        resetBtn.disabled = true;
+        resetBtn.title = "No filters to reset";
     } else if (selectedSpeakers.size === 1) {
         label.textContent = [...selectedSpeakers][0];
+        resetBtn.disabled = false;
+        resetBtn.title = "Clear filters";
     } else {
         label.textContent = `${selectedSpeakers.size} speakers selected`;
+        resetBtn.disabled = false;
+        resetBtn.title = "Clear filters";
     }
 
     // Filter feed using cached references
@@ -1354,22 +1361,31 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
 
-    // Sort alphabetically for display
-    const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+        clearBtn.disabled = true;
+        clearBtn.title = "No watchwords to clear";
+    } else {
+        clearBtn.disabled = false;
+        clearBtn.title = "Clear all watchwords";
+        // Sort alphabetically for display
+        const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-    sortedWatchwords.forEach((word) => {
-        // Find original index for removal
-        const originalIndex = watchwords.indexOf(word);
-        const tag = document.createElement('div');
-        tag.className = 'tag';
-        tag.innerHTML = `
-            ${escapeHtml(word)}
-            <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
-        `;
-        list.appendChild(tag);
-    });
+        sortedWatchwords.forEach((word) => {
+            // Find original index for removal
+            const originalIndex = watchwords.indexOf(word);
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.innerHTML = `
+                ${escapeHtml(word)}
+                <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
+            `;
+            list.appendChild(tag);
+        });
+    }
 }
 
 function addWatchword() {
@@ -1892,6 +1908,16 @@ if (scrollLockBtn) {
         attackVal.textContent = `${attackSlider.value} ms`;
         releaseVal.textContent = `${releaseSlider.value} ms`;
         gainVal.textContent = `${parseFloat(gainSlider.value).toFixed(1)}×`;
+
+        const isDefault = thresholdSlider.value == DEFAULTS.threshold &&
+            ratioSlider.value == DEFAULTS.ratio &&
+            attackSlider.value == DEFAULTS.attack &&
+            releaseSlider.value == DEFAULTS.release &&
+            gainSlider.value == DEFAULTS.gain &&
+            enabledCheckbox.checked == DEFAULTS.enabled;
+
+        resetBtn.disabled = isDefault;
+        resetBtn.title = isDefault ? "Settings are already at default" : "Reset settings to default";
     }
 
     function applyToNodes() {
