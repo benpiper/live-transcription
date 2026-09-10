@@ -17,3 +17,7 @@
 **Vulnerability:** The sanitization functions (`escapeHtml`, `escapeJs`) previously used a `typeof !== 'string'` check that returned the unescaped input. Malicious array or object payloads could bypass this check and be executed upon implicit string conversion in the DOM.
 **Learning:** Type checks that simply return the original non-string input are insufficient because arrays/objects are implicitly cast to strings when rendered, bypassing the filter.
 **Prevention:** Always check for null values explicitly and cast inputs to strings (e.g., `String(unsafe)`) before applying escaping logic to prevent type confusion vulnerabilities.
+## 2026-09-10 - [Fix Insecure SSL Verification]
+**Vulnerability:** SSL certificates were globally unverified by default (`check_hostname = False` and `verify_mode = ssl.CERT_NONE`), exposing the application to MITM attacks.
+**Learning:** Hardcoding insecure SSL context defaults bypasses encryption guarantees. It existed to easily support self-signed certificates in local environments without requiring explicit configuration.
+**Prevention:** Always default to secure configurations (`ssl.create_default_context()`) and require explicit user opt-in (e.g., `insecure_skip_verify: true`) to bypass certificate verification.
