@@ -953,6 +953,18 @@ function toggleSpeaker(speaker, checked) {
 }
 
 function applyMultiSpeakerFilter() {
+    // Update reset button state
+    const resetBtn = document.getElementById('reset-filters');
+    if (resetBtn) {
+        if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
+            resetBtn.disabled = true;
+            resetBtn.title = "No filters active";
+        } else {
+            resetBtn.disabled = false;
+            resetBtn.title = "Clear speaker filters";
+        }
+    }
+
     // Update dropdown label
     const label = document.getElementById('speaker-filter-label');
     if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
@@ -1063,6 +1075,9 @@ document.getElementById('reset-filters').addEventListener('click', () => {
     });
     applyMultiSpeakerFilter();
 });
+
+// Initial call to set state
+applyMultiSpeakerFilter();
 
 async function downloadSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
@@ -1354,7 +1369,25 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = "No watchwords to clear";
+        }
+        const placeholder = document.createElement('div');
+        placeholder.className = 'placeholder';
+        placeholder.textContent = 'No watchwords added';
+        list.appendChild(placeholder);
+        return;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.title = "Clear all watchwords";
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1779,6 +1812,8 @@ if (savedWatchwords) {
     watchwords = JSON.parse(savedWatchwords);
     updateWatchwordsCache();
     renderWatchwords();
+} else {
+    renderWatchwords();
 }
 
 updateNotificationButton();
@@ -1860,6 +1895,32 @@ if (scrollLockBtn) {
 
     const DEFAULTS = { threshold: -30, ratio: 8, attack: 5, release: 150, gain: 1.5, enabled: false };
 
+    function updateResetBtnState() {
+        if (!resetBtn) return;
+        const currentConfig = {
+            enabled: enabledCheckbox.checked,
+            threshold: parseFloat(thresholdSlider.value),
+            ratio: parseFloat(ratioSlider.value),
+            attack: parseFloat(attackSlider.value),
+            release: parseFloat(releaseSlider.value),
+            gain: parseFloat(gainSlider.value)
+        };
+        const isDefault = currentConfig.enabled === DEFAULTS.enabled &&
+            currentConfig.threshold === DEFAULTS.threshold &&
+            currentConfig.ratio === DEFAULTS.ratio &&
+            currentConfig.attack === DEFAULTS.attack &&
+            currentConfig.release === DEFAULTS.release &&
+            currentConfig.gain === DEFAULTS.gain;
+
+        if (isDefault) {
+            resetBtn.disabled = true;
+            resetBtn.title = "Processing already at default settings";
+        } else {
+            resetBtn.disabled = false;
+            resetBtn.title = "Reset audio processing to defaults";
+        }
+    }
+
     function saveSettings() {
         localStorage.setItem('audioProcessing', JSON.stringify({
             threshold: parseFloat(thresholdSlider.value),
@@ -1884,6 +1945,7 @@ if (scrollLockBtn) {
         }
         updateDisplayValues();
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+        updateResetBtnState();
     }
 
     function updateDisplayValues() {
@@ -1912,6 +1974,7 @@ if (scrollLockBtn) {
             updateDisplayValues();
             applyToNodes();
             saveSettings();
+            updateResetBtnState();
         });
     });
 
@@ -1946,6 +2009,7 @@ if (scrollLockBtn) {
         updateDisplayValues();
         applyToNodes();
         saveSettings();
+        updateResetBtnState();
     });
 
     // Reduction meter update (poll compressor.reduction)
@@ -1966,4 +2030,5 @@ if (scrollLockBtn) {
 
     // Initialize
     loadSettings();
+    updateResetBtnState();
 })();
