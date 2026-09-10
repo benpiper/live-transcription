@@ -34,17 +34,30 @@ class AlertRule:
 
     # Compiled regex (lazy-initialized)
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+    _lower_keywords: Optional[List[str]] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         """Validate and compile regex if needed."""
-        if not self.enabled:
-            return
-
         if self.match_type == "regex" and isinstance(self.pattern, str):
-            try:
-                self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
-            except re.error as e:
-                raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+            if self.enabled:
+                try:
+                    self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
+                except re.error as e:
+                    raise ValueError(f"Invalid regex pattern in rule '{self.id}': {e}")
+        elif self.match_type == "word":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            if keywords:
+                # Compile single regex for all keywords, longest first
+                sorted_keywords = sorted(keywords, key=len, reverse=True)
+                pattern_str = r'\b(?:' + '|'.join(re.escape(kw) for kw in sorted_keywords) + r')\b'
+                try:
+                    self._compiled_regex = re.compile(pattern_str, re.IGNORECASE)
+                except re.error:
+                    pass
+        elif self.match_type == "substring":
+            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+            if keywords:
+                self._lower_keywords = [kw.lower() for kw in keywords]
 
     def get_compiled_regex(self) -> Optional[re.Pattern]:
         """Get compiled regex, compiling if needed."""
@@ -90,17 +103,27 @@ class AlertRule:
         # Check text pattern
         matched_text = None
         if self.match_type == "substring":
-            if any(kw.lower() in text.lower() for kw in ([self.pattern] if isinstance(self.pattern, str) else self.pattern)):
+            text_lower = text.lower()
+            # Fallback for dynamic rules
+            if getattr(self, '_lower_keywords', None) is None:
+                keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+                self._lower_keywords = [kw.lower() for kw in keywords] if keywords else []
+            if self._lower_keywords and any(kw in text_lower for kw in self._lower_keywords):
                 matched_text = text
 
         elif self.match_type == "word":
-            # Word boundary matching - prevent "fire" matching "firearm"
-            keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
-            for kw in keywords:
-                pattern = r"\b" + re.escape(kw) + r"\b"
-                if re.search(pattern, text, re.IGNORECASE):
-                    matched_text = text
-                    break
+            # Fallback for dynamic rules
+            if getattr(self, '_compiled_regex', None) is None:
+                keywords = [self.pattern] if isinstance(self.pattern, str) else self.pattern
+                if keywords:
+                    sorted_keywords = sorted(keywords, key=len, reverse=True)
+                    pattern_str = r'\b(?:' + '|'.join(re.escape(kw) for kw in sorted_keywords) + r')\b'
+                    try:
+                        self._compiled_regex = re.compile(pattern_str, re.IGNORECASE)
+                    except re.error:
+                        pass
+            if self._compiled_regex and self._compiled_regex.search(text):
+                matched_text = text
 
         elif self.match_type == "regex":
             regex = self.get_compiled_regex()
