@@ -801,10 +801,11 @@ class EmailAlertTool:
         
         logger.info(f"Fetching initial context from {http_url}...")
         
-        # Create SSL context to handle self-signed certificates
+        # SECURITY: Default to secure SSL verification unless explicitly bypassed in config
         ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+        if self.config.get("websocket", {}).get("insecure_skip_verify", False):
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
         
         try:
             with urllib.request.urlopen(http_url, timeout=5, context=ssl_context) as response:
@@ -843,9 +844,11 @@ class EmailAlertTool:
                 # Create SSL context for wss:// if needed
                 ssl_context = None
                 if uri.startswith("wss://"):
+                    # SECURITY: Default to secure SSL verification unless explicitly bypassed in config
                     ssl_context = ssl.create_default_context()
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
+                    if self.config.get("websocket", {}).get("insecure_skip_verify", False):
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
 
                 async with websockets.connect(uri, ssl=ssl_context) as websocket:
                     logger.info("Connected to transcription feed.")
