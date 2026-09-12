@@ -902,7 +902,22 @@ function drawVisualizer() {
 
 function renderSpeakerFilters() {
     const filterContainer = document.getElementById('speaker-filters');
+    const resetBtn = document.getElementById('reset-filters');
     if (!filterContainer) return;
+
+    if (speakers.size === 0) {
+        filterContainer.innerHTML = '<div class="placeholder">No speakers detected</div>';
+        if (resetBtn) {
+            resetBtn.disabled = true;
+            resetBtn.title = "No speaker filters to clear";
+        }
+        return;
+    } else {
+        if (resetBtn) {
+            resetBtn.disabled = false;
+            resetBtn.title = "Clear speaker filters";
+        }
+    }
 
     // Get current speakers in the list
     const currentItems = Array.from(filterContainer.querySelectorAll('.dropdown-item')).map(
@@ -928,6 +943,26 @@ function renderSpeakerFilters() {
             filterContainer.appendChild(item);
         }
     });
+
+    updateResetFiltersButton();
+}
+
+function updateResetFiltersButton() {
+    const resetBtn = document.getElementById('reset-filters');
+    if (!resetBtn) return;
+
+    if (speakers.size === 0) {
+        resetBtn.disabled = true;
+        resetBtn.title = "No speaker filters to clear";
+        return;
+    }
+
+    // Default state: all speakers selected, no search query
+    const isDefault = (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.size) &&
+                      document.getElementById('speaker-search').value === '';
+
+    resetBtn.disabled = isDefault;
+    resetBtn.title = isDefault ? "Speaker filters are already cleared" : "Clear speaker filters";
 }
 
 function toggleSpeaker(speaker, checked) {
@@ -995,6 +1030,7 @@ function filterBySpeaker(speaker) {
     });
 
     applyMultiSpeakerFilter();
+    updateResetFiltersButton();
 }
 
 // Dropdown toggle
@@ -1024,6 +1060,7 @@ document.getElementById('speaker-search').addEventListener('input', (e) => {
         const speaker = item.dataset.speaker.toLowerCase();
         item.classList.toggle('hidden', !speaker.includes(query));
     });
+    updateResetFiltersButton();
 });
 
 // Select All
@@ -1033,6 +1070,7 @@ document.getElementById('select-all-speakers').addEventListener('click', () => {
         cb.checked = true;
     });
     applyMultiSpeakerFilter();
+    updateResetFiltersButton();
 });
 
 // Deselect All
@@ -1049,10 +1087,14 @@ document.getElementById('deselect-all-speakers').addEventListener('click', () =>
     // Force hide all by creating a dummy set that matches nothing
     selectedSpeakers = new Set(['__NONE__']);
     applyMultiSpeakerFilter();
+    updateResetFiltersButton();
 });
 
 // Reset/Clear button
 document.getElementById('reset-filters').addEventListener('click', () => {
+    if (speakers.size === 0) return;
+    if ((selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.size) && document.getElementById('speaker-search').value === '') return;
+
     selectedSpeakers.clear();
     document.querySelectorAll('#speaker-filters input[type="checkbox"]').forEach(cb => {
         cb.checked = true;
@@ -1062,6 +1104,7 @@ document.getElementById('reset-filters').addEventListener('click', () => {
         item.classList.remove('hidden');
     });
     applyMultiSpeakerFilter();
+    updateResetFiltersButton();
 });
 
 async function downloadSegment(id) {
@@ -1354,7 +1397,18 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+        clearBtn.disabled = true;
+        clearBtn.title = "No watchwords to clear";
+        return;
+    } else {
+        clearBtn.disabled = false;
+        clearBtn.title = "Clear all watchwords";
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1884,6 +1938,7 @@ if (scrollLockBtn) {
         }
         updateDisplayValues();
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+        updateResetButtonState();
     }
 
     function updateDisplayValues() {
@@ -1892,6 +1947,20 @@ if (scrollLockBtn) {
         attackVal.textContent = `${attackSlider.value} ms`;
         releaseVal.textContent = `${releaseSlider.value} ms`;
         gainVal.textContent = `${parseFloat(gainSlider.value).toFixed(1)}×`;
+        updateResetButtonState();
+    }
+
+    function updateResetButtonState() {
+        const isDefault =
+            parseFloat(thresholdSlider.value) === DEFAULTS.threshold &&
+            parseFloat(ratioSlider.value) === DEFAULTS.ratio &&
+            parseFloat(attackSlider.value) === DEFAULTS.attack &&
+            parseFloat(releaseSlider.value) === DEFAULTS.release &&
+            parseFloat(gainSlider.value) === DEFAULTS.gain &&
+            enabledCheckbox.checked === DEFAULTS.enabled;
+
+        resetBtn.disabled = isDefault;
+        resetBtn.title = isDefault ? "Settings are already at defaults" : "Reset audio processing settings to defaults";
     }
 
     function applyToNodes() {
@@ -1919,6 +1988,7 @@ if (scrollLockBtn) {
     enabledCheckbox.addEventListener('change', () => {
         isAudioProcessingEnabled = enabledCheckbox.checked;
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+        updateResetButtonState();
         saveSettings();
         console.log('Audio processing', isAudioProcessingEnabled ? 'enabled' : 'disabled');
     });
