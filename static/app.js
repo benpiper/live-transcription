@@ -955,12 +955,24 @@ function toggleSpeaker(speaker, checked) {
 function applyMultiSpeakerFilter() {
     // Update dropdown label
     const label = document.getElementById('speaker-filter-label');
+    const resetBtn = document.getElementById('reset-filters');
+
     if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
         label.textContent = 'All Speakers';
-    } else if (selectedSpeakers.size === 1) {
-        label.textContent = [...selectedSpeakers][0];
+        if (resetBtn) {
+            resetBtn.disabled = true;
+            resetBtn.title = "No filters active";
+        }
     } else {
-        label.textContent = `${selectedSpeakers.size} speakers selected`;
+        if (resetBtn) {
+            resetBtn.disabled = false;
+            resetBtn.title = "Clear speaker filters";
+        }
+        if (selectedSpeakers.size === 1) {
+            label.textContent = [...selectedSpeakers][0];
+        } else {
+            label.textContent = `${selectedSpeakers.size} speakers selected`;
+        }
     }
 
     // Filter feed using cached references
@@ -1354,7 +1366,21 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = "No watchwords to clear";
+        }
+    } else {
+        if (clearBtn) {
+            clearBtn.disabled = false;
+            clearBtn.title = "Clear all watchwords";
+        }
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -1892,6 +1918,19 @@ if (scrollLockBtn) {
         attackVal.textContent = `${attackSlider.value} ms`;
         releaseVal.textContent = `${releaseSlider.value} ms`;
         gainVal.textContent = `${parseFloat(gainSlider.value).toFixed(1)}×`;
+
+        if (resetBtn) {
+            const isDefault =
+                parseFloat(thresholdSlider.value) === DEFAULTS.threshold &&
+                parseFloat(ratioSlider.value) === DEFAULTS.ratio &&
+                parseFloat(attackSlider.value) === DEFAULTS.attack &&
+                parseFloat(releaseSlider.value) === DEFAULTS.release &&
+                parseFloat(gainSlider.value) === DEFAULTS.gain &&
+                enabledCheckbox.checked === DEFAULTS.enabled;
+
+            resetBtn.disabled = isDefault;
+            resetBtn.title = isDefault ? "Settings are already at defaults" : "Reset to default settings";
+        }
     }
 
     function applyToNodes() {
@@ -1919,6 +1958,7 @@ if (scrollLockBtn) {
     enabledCheckbox.addEventListener('change', () => {
         isAudioProcessingEnabled = enabledCheckbox.checked;
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
+        updateDisplayValues();
         saveSettings();
         console.log('Audio processing', isAudioProcessingEnabled ? 'enabled' : 'disabled');
     });
