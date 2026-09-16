@@ -20,3 +20,6 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+## 2026-09-16 - [Disabled state and empty state for Watchwords, Speaker Filters and Audio Processing]
+**Learning:** Found several dynamic lists and configuration settings (like watchwords, audio processing resets, and speaker filters) that did not display an empty state or properly disable their 'clear/reset' action buttons when the user configuration was empty or already at default.
+**Action:** Always verify that 'Clear' and 'Reset' buttons are disabled with the native `disabled` attribute and provide an explanatory `title` tooltip when the underlying settings match the default state or the underlying list is empty. For empty lists, always show an empty state placeholder.

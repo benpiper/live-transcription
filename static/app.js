@@ -953,6 +953,8 @@ function toggleSpeaker(speaker, checked) {
 }
 
 function applyMultiSpeakerFilter() {
+    updateResetFiltersBtn();
+
     // Update dropdown label
     const label = document.getElementById('speaker-filter-label');
     if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
@@ -1063,6 +1065,14 @@ document.getElementById('reset-filters').addEventListener('click', () => {
     });
     applyMultiSpeakerFilter();
 });
+
+function updateResetFiltersBtn() {
+    const resetBtn = document.getElementById('reset-filters');
+    if (!resetBtn) return;
+    const isDefault = selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length;
+    resetBtn.disabled = isDefault;
+    resetBtn.title = isDefault ? 'All speakers are already selected' : 'Clear speaker filters';
+}
 
 async function downloadSegment(id) {
     const item = transcriptionHistory.find(h => h.id === id);
@@ -1359,17 +1369,28 @@ function renderWatchwords() {
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-    sortedWatchwords.forEach((word) => {
-        // Find original index for removal
-        const originalIndex = watchwords.indexOf(word);
-        const tag = document.createElement('div');
-        tag.className = 'tag';
-        tag.innerHTML = `
-            ${escapeHtml(word)}
-            <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
-        `;
-        list.appendChild(tag);
-    });
+    if (sortedWatchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+    } else {
+        sortedWatchwords.forEach((word) => {
+            // Find original index for removal
+            const originalIndex = watchwords.indexOf(word);
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.innerHTML = `
+                ${escapeHtml(word)}
+                <span class="remove" role="button" tabindex="0" aria-label="Remove watchword ${escapeHtml(word)}" onclick="removeWatchword(${originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' ')removeWatchword(${originalIndex})"><span aria-hidden="true">×</span></span>
+            `;
+            list.appendChild(tag);
+        });
+    }
+
+    const clearBtn = document.getElementById('clear-watchwords');
+    if (clearBtn) {
+        const isEmpty = sortedWatchwords.length === 0;
+        clearBtn.disabled = isEmpty;
+        clearBtn.title = isEmpty ? 'No watchwords to clear' : 'Clear all watchwords';
+    }
 }
 
 function addWatchword() {
@@ -1912,6 +1933,7 @@ if (scrollLockBtn) {
             updateDisplayValues();
             applyToNodes();
             saveSettings();
+            updateAudioResetBtn();
         });
     });
 
@@ -1921,6 +1943,7 @@ if (scrollLockBtn) {
         controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
         saveSettings();
         console.log('Audio processing', isAudioProcessingEnabled ? 'enabled' : 'disabled');
+        updateAudioResetBtn();
     });
 
     // Collapse toggle
@@ -1932,6 +1955,20 @@ if (scrollLockBtn) {
         collapseBtn.setAttribute('title', isCollapsed ? 'Expand Audio Processing' : 'Collapse Audio Processing');
     });
 
+    function updateAudioResetBtn() {
+        if (!resetBtn) return;
+        const isDefault =
+            parseFloat(thresholdSlider.value) === DEFAULTS.threshold &&
+            parseFloat(ratioSlider.value) === DEFAULTS.ratio &&
+            parseFloat(attackSlider.value) === DEFAULTS.attack &&
+            parseFloat(releaseSlider.value) === DEFAULTS.release &&
+            parseFloat(gainSlider.value) === DEFAULTS.gain &&
+            enabledCheckbox.checked === DEFAULTS.enabled;
+
+        resetBtn.disabled = isDefault;
+        resetBtn.title = isDefault ? 'Settings are already at defaults' : 'Reset to defaults';
+    }
+
     // Reset to defaults
     resetBtn.addEventListener('click', () => {
         if (!confirm("Are you sure you want to reset audio processing settings to defaults?")) return;
@@ -1942,10 +1979,11 @@ if (scrollLockBtn) {
         gainSlider.value = DEFAULTS.gain;
         enabledCheckbox.checked = DEFAULTS.enabled;
         isAudioProcessingEnabled = DEFAULTS.enabled;
-        controlsDiv.classList.remove('disabled');
+        controlsDiv.classList.toggle('disabled', !enabledCheckbox.checked);
         updateDisplayValues();
         applyToNodes();
         saveSettings();
+        updateAudioResetBtn();
     });
 
     // Reduction meter update (poll compressor.reduction)
@@ -1966,4 +2004,5 @@ if (scrollLockBtn) {
 
     // Initialize
     loadSettings();
+    updateAudioResetBtn();
 })();
