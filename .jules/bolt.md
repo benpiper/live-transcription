@@ -13,3 +13,6 @@
 ## 2025-03-05 - Frontend Watchwords Regex Caching
 **Learning:** In the vanilla JS frontend, avoid repetitive object creation like `new RegExp()` and string transformations like `.toLowerCase()` inside UI rendering hot paths. Testing string matches for multiple watchwords patterns rapidly compounds.
 **Action:** Pre-compile regular expressions and cache globally whenever their source configuration changes. Combine multiple words into a single regex `(word1|word2)`, sorting by length descending to match longer words first. When caching global regular expressions, ensure `lastIndex = 0` is manually reset before subsequent uses to prevent stateful matching bugs.
+## 2026-09-16 - Optimize AlertRule keyword matching
+**Learning:** Dynamically compiling regexes in a loop inside a hot path creates significant overhead, especially for rules with large keyword lists. Also, skipping caching during initialization when an object is disabled causes errors or requires duplicate lazy-loading logic if dynamically enabled.
+**Action:** Pre-compile a single combined regex for `word` match types during initialization. Remove early-return caching bypass for disabled rules so they are ready if enabled at runtime.
