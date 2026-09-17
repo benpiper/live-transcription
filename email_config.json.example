@@ -43,7 +43,8 @@
         "attach_audio": true
     },
     "websocket": {
-        "url": "ws://localhost:8000/ws"
+        "url": "ws://localhost:8000/ws",
+        "insecure_skip_verify": false
     },
     "heartbeat": {
         "enabled": true,
