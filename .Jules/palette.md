@@ -20,3 +20,6 @@
 ## 2026-05-25 - [Confirming Destructive Actions]
 **Learning:** Users might accidentally click "Clear All" or "Reset" buttons for settings that they've customized (like watchwords or audio processing sliders). Without a confirmation step, this leads to an irrecoverable loss of configurations.
 **Action:** Always implement a native `confirm()` warning or modal when exposing actions that clear state or destroy user-entered data to prevent accidental data loss.
+## 2024-05-20 - Add Disabled States to Clear/Reset Buttons
+**Learning:** Providing explicit disabled states on "Clear" or "Reset" controls (with a tooltip) and empty state messages for dynamic lists greatly improves user confidence by clearly signaling when actions are unavailable.
+**Action:** Use native HTML `disabled` attribute and `title` tooltips for baseline-state buttons, and use `.placeholder` for empty dynamic lists.

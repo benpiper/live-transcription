@@ -955,6 +955,15 @@ function toggleSpeaker(speaker, checked) {
 function applyMultiSpeakerFilter() {
     // Update dropdown label
     const label = document.getElementById('speaker-filter-label');
+    const resetBtn = document.getElementById('reset-filters');
+
+    // Update reset button state once
+    if (resetBtn) {
+        const noFilters = selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length;
+        resetBtn.disabled = noFilters;
+        resetBtn.title = noFilters ? 'No filters applied' : 'Clear filters';
+    }
+
     if (selectedSpeakers.size === 0 || selectedSpeakers.size === speakers.length) {
         label.textContent = 'All Speakers';
     } else if (selectedSpeakers.size === 1) {
@@ -1354,7 +1363,22 @@ function pruneHistory() {
 // Watchword Management
 function renderWatchwords() {
     const list = document.getElementById('watchwords-list');
+    const clearBtn = document.getElementById('clear-watchwords');
     list.innerHTML = '';
+
+    if (watchwords.length === 0) {
+        list.innerHTML = '<div class="placeholder">No watchwords added</div>';
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.title = 'No watchwords to clear';
+        }
+        return;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.title = 'Clear all watchwords';
+    }
 
     // Sort alphabetically for display
     const sortedWatchwords = [...watchwords].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
